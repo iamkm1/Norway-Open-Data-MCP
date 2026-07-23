@@ -1,0 +1,100 @@
+{
+  "name": "norway-open-data-mcp",
+  "version": "0.1.0",
+  "description": "Local MCP server that gives AI assistants curated read-only tools for Norwegian public data, built on norway-open-data-sdk.",
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "norway",
+    "norge",
+    "open-data",
+    "public-data",
+    "claude",
+    "cursor",
+    "ssb",
+    "brreg",
+    "kartverket",
+    "entur",
+    "met",
+    "nve",
+    "stdio"
+  ],
+  "license": "MIT",
+  "author": "Norway Open Data MCP contributors",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "bin": {
+    "norway-open-data-mcp": "./dist/cli.js"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md",
+    "docs/architecture.md",
+    "docs/tool-catalogue.md",
+    "docs/capability-matrix.md",
+    "docs/design.md",
+    "docs/inspector-checklist.md",
+    "docs/privacy.md"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "vitest run tests/unit tests/eval",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage tests/unit tests/eval",
+    "test:integration": "pnpm build && vitest run tests/integration",
+    "test:package": "pnpm build && tsx scripts/test-package.ts",
+    "test:live": "cross-env RUN_LIVE_TESTS=true vitest run tests/live",
+    "inspector": "pnpm build && npx -y @modelcontextprotocol/inspector node dist/cli.js",
+    "doctor": "pnpm build && node dist/cli.js --doctor",
+    "audit:stdout": "tsx scripts/check-stdout.ts",
+    "verify": "prettier --check . && eslint . && tsc --noEmit && tsx scripts/check-stdout.ts && vitest run --coverage tests/unit tests/eval && tsup && vitest run tests/integration && tsx scripts/test-package.ts",
+    "prepublishOnly": "pnpm verify"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "norway-open-data-sdk": "^0.5.2",
+    "zod": "^4.1.13"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^26.1.1",
+    "@vitest/coverage-v8": "^4.1.10",
+    "cross-env": "^10.1.0",
+    "eslint": "^10.7.0",
+    "eslint-config-prettier": "^10.1.5",
+    "prettier": "^3.9.6",
+    "tsup": "^8.5.1",
+    "tsx": "^4.23.1",
+    "typescript": "~6.0.3",
+    "typescript-eslint": "^8.65.0",
+    "vitest": "^4.1.10"
+  },
+  "packageManager": "pnpm@11.16.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/iamkm1/Norway-Open-Data-MCP.git"
+  },
+  "homepage": "https://github.com/iamkm1/Norway-Open-Data-MCP#readme",
+  "bugs": {
+    "url": "https://github.com/iamkm1/Norway-Open-Data-MCP/issues"
+  }
+}

@@ -1,0 +1,475 @@
+{
+  "$comment": "Tool-routing evaluation corpus. Each case is a realistic user question in Norwegian or English, the tool that should be selected, and the tools that must not be. CI validates this file structurally (names exist, arguments satisfy the real input schemas, every documented ambiguity pair is covered). Model-based scoring is optional and needs no API key in CI.",
+  "version": 1,
+  "cases": [
+    {
+      "id": "company-search-by-name-en",
+      "question": "What is Equinor's organization number?",
+      "language": "en",
+      "expectedTool": "search_norwegian_companies",
+      "mustNotSelect": ["get_norwegian_company_profile"],
+      "reason": "The organization number is what is being asked for, so it cannot already be known.",
+      "requiredArguments": { "name": "Equinor" }
+    },
+    {
+      "id": "company-search-by-name-no",
+      "question": "Finn organisasjonsnummeret til Norges Bank.",
+      "language": "no",
+      "expectedTool": "search_norwegian_companies",
+      "mustNotSelect": ["get_norwegian_company_profile"],
+      "reason": "Name is known, number is not.",
+      "requiredArguments": { "name": "Norges Bank" }
+    },
+    {
+      "id": "company-list-by-municipality",
+      "question": "Hvilke selskaper er registrert i Bergen kommune?",
+      "language": "no",
+      "expectedTool": "search_norwegian_companies",
+      "mustNotSelect": ["get_norwegian_municipality_profile", "get_norwegian_company_profile"],
+      "reason": "A list of organizations filtered by municipality, not a municipality profile.",
+      "requiredArguments": { "municipalityCode": "4601" },
+      "expectedClarification": "The municipality code for Bergen must be known or resolved; the tool takes a four-digit code, not a name."
+    },
+    {
+      "id": "company-profile-by-number-en",
+      "question": "Tell me about the company with organization number 923609016.",
+      "language": "en",
+      "expectedTool": "get_norwegian_company_profile",
+      "mustNotSelect": ["search_norwegian_companies"],
+      "reason": "An exact nine-digit organization number is present.",
+      "requiredArguments": { "organizationNumber": "923609016" }
+    },
+    {
+      "id": "company-profile-by-number-no",
+      "question": "Er selskapet med orgnr 923 609 016 konkurs?",
+      "language": "no",
+      "expectedTool": "get_norwegian_company_profile",
+      "mustNotSelect": ["search_norwegian_companies"],
+      "reason": "Bankruptcy status is part of the single-company profile; the number is given.",
+      "requiredArguments": { "organizationNumber": "923 609 016" }
+    },
+    {
+      "id": "company-employees",
+      "question": "How many employees does the company registered as 923609016 have?",
+      "language": "en",
+      "expectedTool": "get_norwegian_company_profile",
+      "mustNotSelect": ["query_norwegian_statistics", "search_norwegian_companies"],
+      "reason": "Employee count for one known organization comes from the register, not from statistics.",
+      "requiredArguments": { "organizationNumber": "923609016" }
+    },
+    {
+      "id": "address-postal-code",
+      "question": "Hva er postnummeret til Karl Johans gate 1 i Oslo?",
+      "language": "no",
+      "expectedTool": "search_norwegian_addresses",
+      "mustNotSelect": ["get_norwegian_location_profile"],
+      "reason": "A lookup of address facts, with no conditions or warnings requested.",
+      "requiredArguments": { "query": "Karl Johans gate 1" }
+    },
+    {
+      "id": "address-exists",
+      "question": "Does the address Storgata 47B in Lillehammer actually exist?",
+      "language": "en",
+      "expectedTool": "search_norwegian_addresses",
+      "mustNotSelect": ["get_norwegian_location_profile"],
+      "reason": "Verification and disambiguation, not enrichment.",
+      "requiredArguments": { "query": "Storgata 47B Lillehammer" }
+    },
+    {
+      "id": "address-coordinates",
+      "question": "Give me the coordinates for Bryggen 5, Bergen.",
+      "language": "en",
+      "expectedTool": "search_norwegian_addresses",
+      "mustNotSelect": ["get_norwegian_location_profile", "get_norwegian_weather_forecast"],
+      "reason": "Only the coordinate is wanted, not conditions at it.",
+      "requiredArguments": { "query": "Bryggen 5 Bergen" }
+    },
+    {
+      "id": "address-disambiguation",
+      "question": "Det finnes flere Storgata 1 i Norge — hvilke?",
+      "language": "no",
+      "expectedTool": "search_norwegian_addresses",
+      "mustNotSelect": ["get_norwegian_location_profile"],
+      "reason": "Explicitly a disambiguation request across several candidates.",
+      "requiredArguments": { "query": "Storgata 1", "limit": 25 }
+    },
+    {
+      "id": "location-profile-conditions",
+      "question": "What's it like at Storgata 1 in Lillehammer right now — weather and any warnings?",
+      "language": "en",
+      "expectedTool": "get_norwegian_location_profile",
+      "mustNotSelect": ["search_norwegian_addresses", "get_norwegian_weather_forecast"],
+      "reason": "Conditions at one specific known address, combining several providers.",
+      "requiredArguments": { "query": "Storgata 1 Lillehammer" }
+    },
+    {
+      "id": "location-profile-hazard-at-address",
+      "question": "Er det farevarsler for adressen Bryggen 5 i Bergen?",
+      "language": "no",
+      "expectedTool": "get_norwegian_location_profile",
+      "mustNotSelect": ["get_current_norwegian_hazards"],
+      "reason": "Warnings tied to one specific address use the profile's administrative-area matching.",
+      "requiredArguments": { "query": "Bryggen 5 Bergen" }
+    },
+    {
+      "id": "location-profile-roads",
+      "question": "Which roads are near Prinsens gate 1 in Trondheim?",
+      "language": "en",
+      "expectedTool": "get_norwegian_location_profile",
+      "mustNotSelect": ["search_norwegian_addresses"],
+      "reason": "Nearby road segments are part of the location profile.",
+      "requiredArguments": { "query": "Prinsens gate 1 Trondheim" }
+    },
+    {
+      "id": "municipality-population-no",
+      "question": "Hvor mange bor i Tromsø kommune?",
+      "language": "no",
+      "expectedTool": "get_norwegian_municipality_profile",
+      "mustNotSelect": ["query_norwegian_statistics"],
+      "reason": "A ready-made municipality answer in one call; no table ID needed.",
+      "requiredArguments": { "query": "Tromsø" }
+    },
+    {
+      "id": "municipality-population-en",
+      "question": "What is the population of municipality 0301?",
+      "language": "en",
+      "expectedTool": "get_norwegian_municipality_profile",
+      "mustNotSelect": ["query_norwegian_statistics"],
+      "reason": "Four-digit municipality code with a standard demographic question.",
+      "requiredArguments": { "query": "0301" }
+    },
+    {
+      "id": "municipality-life-expectancy",
+      "question": "Hva er forventet levealder i Stavanger kommune?",
+      "language": "no",
+      "expectedTool": "get_norwegian_municipality_profile",
+      "mustNotSelect": ["query_norwegian_statistics"],
+      "reason": "Life expectancy is a profile section sourced from FHI.",
+      "requiredArguments": { "query": "Stavanger" }
+    },
+    {
+      "id": "municipality-growth",
+      "question": "Is Bodø municipality growing or shrinking?",
+      "language": "en",
+      "expectedTool": "get_norwegian_municipality_profile",
+      "mustNotSelect": ["query_norwegian_statistics"],
+      "reason": "Year-over-year change is included in the profile.",
+      "requiredArguments": { "query": "Bodø" }
+    },
+    {
+      "id": "municipality-business-count",
+      "question": "Hvor mange virksomheter er registrert i Kristiansand kommune?",
+      "language": "no",
+      "expectedTool": "get_norwegian_municipality_profile",
+      "mustNotSelect": ["search_norwegian_companies"],
+      "reason": "A count, not a list; the profile returns the registered total directly.",
+      "requiredArguments": { "query": "Kristiansand" }
+    },
+    {
+      "id": "weather-coordinate",
+      "question": "What is the weather forecast for 59.9139, 10.7522 over the next two days?",
+      "language": "en",
+      "expectedTool": "get_norwegian_weather_forecast",
+      "mustNotSelect": ["get_current_norwegian_hazards", "get_norwegian_location_profile"],
+      "reason": "A multi-hour forecast for a bare coordinate.",
+      "requiredArguments": { "latitude": 59.9139, "longitude": 10.7522, "hours": 48 }
+    },
+    {
+      "id": "weather-tomorrow-no",
+      "question": "Hvordan blir været i morgen på 60.39, 5.32?",
+      "language": "no",
+      "expectedTool": "get_norwegian_weather_forecast",
+      "mustNotSelect": ["get_current_norwegian_hazards"],
+      "reason": "Forecast, not a hazard warning.",
+      "requiredArguments": { "latitude": 60.39, "longitude": 5.32 }
+    },
+    {
+      "id": "weather-rain",
+      "question": "Hvor mye regn kommer det i Bergen i morgen?",
+      "language": "no",
+      "expectedTool": "get_norwegian_weather_forecast",
+      "mustNotSelect": ["get_current_norwegian_hazards"],
+      "reason": "Precipitation is forecast data even though heavy rain sounds hazard-adjacent.",
+      "requiredArguments": { "latitude": 60.3913, "longitude": 5.3221 },
+      "expectedClarification": "Bergen must first be resolved to a coordinate; the tool takes latitude and longitude, not a place name."
+    },
+    {
+      "id": "weather-wind",
+      "question": "How windy will it be at 69.65, 18.96 tonight?",
+      "language": "en",
+      "expectedTool": "get_norwegian_weather_forecast",
+      "mustNotSelect": ["get_current_norwegian_hazards"],
+      "reason": "Wind speed is a forecast variable.",
+      "requiredArguments": { "latitude": 69.65, "longitude": 18.96, "hours": 12 }
+    },
+    {
+      "id": "hazard-avalanche-no",
+      "question": "Er det snøskredfare i Norge i dag?",
+      "language": "no",
+      "expectedTool": "get_current_norwegian_hazards",
+      "mustNotSelect": ["get_norwegian_weather_forecast"],
+      "reason": "An official avalanche warning, not a weather forecast.",
+      "requiredArguments": { "types": ["avalanche"] }
+    },
+    {
+      "id": "hazard-flood-en",
+      "question": "Are there any flood warnings in Norway this week?",
+      "language": "en",
+      "expectedTool": "get_current_norwegian_hazards",
+      "mustNotSelect": ["get_norwegian_weather_forecast"],
+      "reason": "Official NVE flood warnings over a short date range.",
+      "requiredArguments": {
+        "types": ["flood"],
+        "startDate": "2026-07-23",
+        "endDate": "2026-07-29"
+      }
+    },
+    {
+      "id": "hazard-landslide",
+      "question": "Finnes det jordskredvarsel akkurat nå?",
+      "language": "no",
+      "expectedTool": "get_current_norwegian_hazards",
+      "mustNotSelect": ["get_norwegian_weather_forecast", "get_norwegian_location_profile"],
+      "reason": "Landslide warnings nationwide, with no specific address given.",
+      "requiredArguments": { "types": ["landslide"] }
+    },
+    {
+      "id": "hazard-varsom",
+      "question": "What does Varsom say today?",
+      "language": "en",
+      "expectedTool": "get_current_norwegian_hazards",
+      "mustNotSelect": ["get_norwegian_weather_forecast"],
+      "reason": "Varsom is NVE's warning service by name.",
+      "requiredArguments": {}
+    },
+    {
+      "id": "hazard-all-types",
+      "question": "Gi meg alle farevarsler for Norge i dag.",
+      "language": "no",
+      "expectedTool": "get_current_norwegian_hazards",
+      "mustNotSelect": ["get_norwegian_weather_forecast"],
+      "reason": "All three hazard feeds, which is the tool's default.",
+      "requiredArguments": {}
+    },
+    {
+      "id": "electricity-today-no",
+      "question": "Hva koster strømmen i Oslo i dag?",
+      "language": "no",
+      "expectedTool": "get_norwegian_electricity_prices",
+      "mustNotSelect": ["query_norwegian_statistics"],
+      "reason": "Hourly spot price for a bidding zone; Oslo is NO1.",
+      "requiredArguments": { "area": "NO1" }
+    },
+    {
+      "id": "electricity-cheapest-hour",
+      "question": "When is electricity cheapest today in Trondheim?",
+      "language": "en",
+      "expectedTool": "get_norwegian_electricity_prices",
+      "mustNotSelect": ["query_norwegian_statistics"],
+      "reason": "The tool returns the cheapest hour directly; Trondheim is NO3.",
+      "requiredArguments": { "area": "NO3" }
+    },
+    {
+      "id": "electricity-specific-date",
+      "question": "Hva var strømprisen i NO4 den 1. juli 2026?",
+      "language": "no",
+      "expectedTool": "get_norwegian_electricity_prices",
+      "mustNotSelect": ["query_norwegian_statistics"],
+      "reason": "A historical day for a named bidding zone.",
+      "requiredArguments": { "area": "NO4", "date": "2026-07-01" }
+    },
+    {
+      "id": "electricity-vs-energy-statistics",
+      "question": "How much electricity did Norway produce in 2023?",
+      "language": "en",
+      "expectedTool": "query_norwegian_statistics",
+      "mustNotSelect": ["get_norwegian_electricity_prices"],
+      "reason": "National production is a statistics table, not an hourly spot price.",
+      "requiredArguments": { "tableId": "08307" },
+      "expectedClarification": "The SSB table ID must be known or asked for; production tables are not spot prices."
+    },
+    {
+      "id": "transport-next-bus-no",
+      "question": "Når går neste buss fra Majorstuen?",
+      "language": "no",
+      "expectedTool": "get_norwegian_transport_departures",
+      "mustNotSelect": ["search_norwegian_addresses"],
+      "reason": "A departure board for a named transit stop.",
+      "requiredArguments": { "stopName": "Majorstuen" }
+    },
+    {
+      "id": "transport-departures-en",
+      "question": "Show me the next departures from Oslo S.",
+      "language": "en",
+      "expectedTool": "get_norwegian_transport_departures",
+      "mustNotSelect": ["search_norwegian_addresses"],
+      "reason": "Stop name resolution followed by a departure board.",
+      "requiredArguments": { "stopName": "Oslo S" }
+    },
+    {
+      "id": "transport-by-stop-id",
+      "question": "Departures for NSR:StopPlace:58366 please.",
+      "language": "en",
+      "expectedTool": "get_norwegian_transport_departures",
+      "mustNotSelect": ["search_norwegian_addresses"],
+      "reason": "A known Entur stop place ID is supplied directly.",
+      "requiredArguments": { "stopPlaceId": "NSR:StopPlace:58366" }
+    },
+    {
+      "id": "transport-tram",
+      "question": "Når kommer trikken på Nationaltheatret?",
+      "language": "no",
+      "expectedTool": "get_norwegian_transport_departures",
+      "mustNotSelect": ["search_norwegian_addresses"],
+      "reason": "Tram departures are part of the same departure board.",
+      "requiredArguments": { "stopName": "Nationaltheatret" }
+    },
+    {
+      "id": "transport-journey-unsupported",
+      "question": "How do I travel from Oslo S to Bergen by train?",
+      "language": "en",
+      "expectedTool": null,
+      "mustNotSelect": ["get_norwegian_transport_departures", "search_norwegian_addresses"],
+      "reason": "Journey planning is deliberately not exposed in v0.1.",
+      "requiredArguments": {},
+      "expectedClarification": "The assistant should say route planning between two places is not available in this server, rather than returning a departure board for one of them."
+    },
+    {
+      "id": "statistics-discovery",
+      "question": "What dimensions does SSB table 07459 have?",
+      "language": "en",
+      "expectedTool": "query_norwegian_statistics",
+      "mustNotSelect": ["get_norwegian_municipality_profile"],
+      "reason": "The discovery call: a table ID with no selections.",
+      "requiredArguments": { "tableId": "07459" }
+    },
+    {
+      "id": "statistics-population-by-age",
+      "question": "Vis befolkning etter alder for hele Norge fra SSB-tabell 07459.",
+      "language": "no",
+      "expectedTool": "query_norwegian_statistics",
+      "mustNotSelect": ["get_norwegian_municipality_profile"],
+      "reason": "A custom breakdown by a dimension, which the municipality profile cannot express.",
+      "requiredArguments": { "tableId": "07459" },
+      "expectedClarification": "Value codes must be discovered first by calling without selections; they cannot be guessed."
+    },
+    {
+      "id": "statistics-employment",
+      "question": "Get me unemployment figures from SSB table 08931.",
+      "language": "en",
+      "expectedTool": "query_norwegian_statistics",
+      "mustNotSelect": ["get_norwegian_municipality_profile"],
+      "reason": "A named SSB table for a non-demographic statistic.",
+      "requiredArguments": { "tableId": "08931" }
+    },
+    {
+      "id": "statistics-vs-municipality-profile",
+      "question": "Hvor mange bor i Bergen? Jeg trenger bare tallet.",
+      "language": "no",
+      "expectedTool": "get_norwegian_municipality_profile",
+      "mustNotSelect": ["query_norwegian_statistics"],
+      "reason": "One number for one municipality: the profile answers it in a single call without a table ID.",
+      "requiredArguments": { "query": "Bergen" }
+    },
+    {
+      "id": "statistics-with-selection",
+      "question": "From SSB table 07459, give me Oslo and Tromsø for 2025.",
+      "language": "en",
+      "expectedTool": "query_norwegian_statistics",
+      "mustNotSelect": ["get_norwegian_municipality_profile"],
+      "reason": "An explicit multi-region selection against a named table.",
+      "requiredArguments": {
+        "tableId": "07459",
+        "selections": { "Region": ["0301", "5401"], "Tid": ["2025"] }
+      }
+    },
+    {
+      "id": "ambiguous-company-name-or-number",
+      "question": "Sjekk selskapet Equinor for meg.",
+      "language": "no",
+      "expectedTool": "search_norwegian_companies",
+      "mustNotSelect": ["get_norwegian_company_profile"],
+      "reason": "Only a name is given, so the number must be resolved first.",
+      "requiredArguments": { "name": "Equinor" },
+      "expectedClarification": "If several organizations match the name, ask which one before fetching a profile."
+    },
+    {
+      "id": "ambiguous-weather-or-hazard",
+      "question": "Er det trygt å kjøre over fjellet i dag?",
+      "language": "no",
+      "expectedTool": "get_current_norwegian_hazards",
+      "mustNotSelect": [],
+      "reason": "A safety question maps to official warnings first; the forecast is supporting context, not the answer.",
+      "requiredArguments": {},
+      "expectedClarification": "The result is never an all-clear; the user must be directed to varsom.no and to road-status services for a driving decision."
+    },
+    {
+      "id": "ambiguous-municipality-or-address",
+      "question": "Fortell meg om Bergen.",
+      "language": "no",
+      "expectedTool": "get_norwegian_municipality_profile",
+      "mustNotSelect": ["search_norwegian_addresses", "get_norwegian_location_profile"],
+      "reason": "A place named without a street is the municipality, not an address.",
+      "requiredArguments": { "query": "Bergen" }
+    },
+    {
+      "id": "ambiguous-stop-or-address",
+      "question": "Hva skjer på Jernbanetorget?",
+      "language": "no",
+      "expectedTool": "get_norwegian_transport_departures",
+      "mustNotSelect": [],
+      "reason": "Jernbanetorget is primarily a transit interchange, but the intent is genuinely ambiguous.",
+      "requiredArguments": { "stopName": "Jernbanetorget" },
+      "expectedClarification": "Ask whether the user means departures from the stop or the location itself."
+    },
+    {
+      "id": "out-of-scope-datasets",
+      "question": "Which open datasets does Norway publish about air quality?",
+      "language": "en",
+      "expectedTool": null,
+      "mustNotSelect": ["query_norwegian_statistics", "search_norwegian_companies"],
+      "reason": "Data.norge catalogue search is deferred to v0.2 and must not be faked with a statistics query.",
+      "requiredArguments": {},
+      "expectedClarification": "The assistant should say open-dataset catalogue search is not available in this server."
+    },
+    {
+      "id": "out-of-scope-personal-data",
+      "question": "Hvem eier selskapet med orgnr 923609016, med fødselsnummer?",
+      "language": "no",
+      "expectedTool": "get_norwegian_company_profile",
+      "mustNotSelect": [],
+      "reason": "The public profile can be returned, but personal identifiers are deliberately out of scope for the SDK.",
+      "requiredArguments": { "organizationNumber": "923609016" },
+      "expectedClarification": "State that national identity numbers and role-holder personal data are not available through this server."
+    },
+    {
+      "id": "out-of-scope-exchange-rate",
+      "question": "What is the EUR to NOK exchange rate today?",
+      "language": "en",
+      "expectedTool": null,
+      "mustNotSelect": ["get_norwegian_electricity_prices", "query_norwegian_statistics"],
+      "reason": "Norges Bank currency data is deferred to v0.2; the electricity tool's exchangeRate field must not be repurposed.",
+      "requiredArguments": {},
+      "expectedClarification": "Say exchange rates are not exposed by this server."
+    },
+    {
+      "id": "electricity-zone-inference",
+      "question": "Strømpris i Tromsø nå?",
+      "language": "no",
+      "expectedTool": "get_norwegian_electricity_prices",
+      "mustNotSelect": ["query_norwegian_statistics"],
+      "reason": "Tromsø is bidding zone NO4, which the tool description states.",
+      "requiredArguments": { "area": "NO4" }
+    },
+    {
+      "id": "weather-hours-bound",
+      "question": "Give me a ten-day hourly forecast for 63.43, 10.39.",
+      "language": "en",
+      "expectedTool": "get_norwegian_weather_forecast",
+      "mustNotSelect": [],
+      "reason": "The request exceeds the tool's 96-hour maximum, which must be clamped rather than refused outright.",
+      "requiredArguments": { "latitude": 63.43, "longitude": 10.39, "hours": 96 },
+      "expectedClarification": "Explain that at most 96 hourly entries are returned, and that MET's resolution declines beyond a few days."
+    }
+  ]
+}

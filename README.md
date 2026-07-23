@@ -1,43 +1,36 @@
 # Norway Open Data MCP
 
+[![npm version](https://img.shields.io/npm/v/norway-open-data-mcp.svg)](https://www.npmjs.com/package/norway-open-data-mcp)
+[![npm downloads](https://img.shields.io/npm/dm/norway-open-data-mcp.svg)](https://www.npmjs.com/package/norway-open-data-mcp)
+[![CI](https://github.com/iamkm1/Norway-Open-Data-MCP/actions/workflows/ci.yml/badge.svg)](https://github.com/iamkm1/Norway-Open-Data-MCP/actions/workflows/ci.yml)
+[![Node.js](https://img.shields.io/node/v/norway-open-data-mcp.svg)](https://nodejs.org)
+[![License: MIT](https://img.shields.io/npm/l/norway-open-data-mcp.svg)](LICENSE)
+
 **Norway Open Data MCP lets AI assistants use Norwegian public data directly as
-tools. It runs locally on your computer and requires no hosted backend.**
+tools. It runs locally on your machine and needs no hosted backend.**
 
 ```bash
 npx -y norway-open-data-mcp
 ```
 
-That is the whole deployment story. Your MCP client starts this package as a
-local subprocess, talks to it over stdin/stdout, and the package calls
-Norwegian public APIs directly from your machine through
-[`norway-open-data-sdk`](https://www.npmjs.com/package/norway-open-data-sdk).
+That single command is the entire deployment story. Your MCP client starts this
+package as a local subprocess, talks to it over stdin/stdout, and the package
+calls Norwegian public APIs directly from your machine.
 
----
+Built on top of
+[Norway Open Data SDK](https://github.com/iamkm1/Norway-Open-Data), which
+provides the underlying provider integrations, validation, retries, caching and
+typed responses. This package adds a curated, AI-facing tool layer on top:
 
-## Kort forklaring på norsk
+```
+AI client → Norway Open Data MCP → Norway Open Data SDK → Norwegian public APIs
+```
 
-Norway Open Data MCP gjør norske offentlige data tilgjengelig som verktøy for
-AI-assistenter som Claude, Cursor og VS Code.
-
-Serveren kjører **lokalt på din egen maskin**. Det finnes ingen bakenforliggende
-tjeneste, ingen database, ingen brukerkonto og ingen telemetri. Forespørslene
-går rett fra maskinen din til den relevante norske offentlige API-en gjennom
-Norway Open Data SDK.
-
-Du får ti kuraterte, **kun-lesende** verktøy: søk i Enhetsregisteret, oppslag av
-selskaper og adresser, kommuneprofiler, værvarsel fra MET, farevarsler fra NVE,
-strømpriser, avganger fra Entur og spørringer mot SSBs statistikkbanker.
-
-Verktøynavnene er bevisst **ikke oversatt**. Stabile identifikatorer skal være
-språknøytrale, slik at samme navn virker uansett hvilket språk du skriver på —
-du kan gjerne stille spørsmålene dine på norsk.
-
-Alle data er underlagt hver enkelt leverandørs vilkår, lisenser og
-trafikkgrenser. Hvert resultat inneholder kildehenvisning.
-
-> **Farevarsler er aldri en «alt klart»-melding.** En tom liste betyr ikke at et
-> område er trygt. Bruk de offisielle tjenestene på [varsom.no](https://varsom.no)
-> for alle sikkerhetsvurderinger.
+> **Run the command above in a plain terminal and it looks like it hangs.** That
+> is expected. An MCP server has no interactive UI: it waits silently for a
+> client to speak the Model Context Protocol over stdin/stdout. Press `Ctrl+C`
+> to exit. In normal use you never launch it by hand — an MCP client starts it
+> for you (see [Client configuration](#client-configuration)).
 
 ---
 
@@ -55,8 +48,10 @@ listens on a port.
 ## Relationship to Norway Open Data SDK
 
 This package is a **consumer** of the published
-`norway-open-data-sdk` npm package, exactly like any other application. It does
-not vendor, fork or modify the SDK.
+[`norway-open-data-sdk`](https://www.npmjs.com/package/norway-open-data-sdk) npm
+package ([source](https://github.com/iamkm1/Norway-Open-Data)), exactly like any
+other application. It does not vendor, fork or modify the SDK, and the two are
+separate packages and separate repositories.
 
 |                                        | Norway Open Data SDK      | Norway Open Data MCP (this package) |
 | -------------------------------------- | ------------------------- | ----------------------------------- |
@@ -103,8 +98,8 @@ No hosted backend · no HTTP listener · no database · no accounts · no teleme
 
 ## Installation
 
-You do not need to install anything. `npx` fetches and runs it on demand, which
-is how the client configurations below are written.
+You do not need to install anything up front. `npx` fetches and runs the package
+on demand, which is how the client configurations below are written.
 
 To install it explicitly:
 
@@ -115,9 +110,9 @@ npm install norway-open-data-mcp       # as a project dependency
 
 ## Client configuration
 
-> Configuration formats were verified against each vendor's current
-> documentation. Note that the top-level key differs: Claude Desktop and Cursor
-> use `mcpServers`, VS Code uses `servers`.
+> The formats below were verified against each vendor's current documentation.
+> Note that the top-level key differs: Claude Desktop and Cursor use
+> `mcpServers`, while VS Code uses `servers`.
 
 ### Claude Desktop
 
@@ -182,10 +177,20 @@ Configuration**). VS Code uses `servers`, not `mcpServers`:
 
 ### Windows notes
 
-- `npx` must be on `PATH`. If the server fails to start with an `ENOENT` error
-  mentioning `${APPDATA}`, add `"APPDATA": "C:\\Users\\<you>\\AppData\\Roaming\\"`
-  to the `env` block — a known Claude Desktop issue — and make sure npm is
-  installed globally (`npm install -g npm`).
+- `npx` must be on `PATH`. If a client cannot start the server, some Windows
+  clients need the command routed through `cmd`:
+
+  ```json
+  {
+    "command": "cmd",
+    "args": ["/c", "npx", "-y", "norway-open-data-mcp"]
+  }
+  ```
+
+- If the server fails to start with an `ENOENT` error mentioning `${APPDATA}`,
+  add `"APPDATA": "C:\\Users\\<you>\\AppData\\Roaming\\"` to the `env` block — a
+  known Claude Desktop issue — and make sure npm is installed globally
+  (`npm install -g npm`).
 - Use double backslashes in any JSON path.
 - If `npx` is blocked by execution policy, install globally and use
   `"command": "norway-open-data-mcp"` with `"args": []`.
@@ -212,34 +217,62 @@ Everything is optional. Nine of the ten tools work with no configuration.
 | `NORWAY_MCP_CACHE`         | `1`                          | In-process response cache. Never written to disk.                                                                                                                               |
 | `NORWAY_MCP_DEBUG`         | `0`                          | Verbose diagnostics on **stderr only**, with credentials redacted.                                                                                                              |
 
+Set the contact email with a placeholder of your own, for example:
+
+```powershell
+$env:NORWAY_MCP_CONTACT_EMAIL="you@example.com"
+```
+
 **No contact email is defaulted.** A fake address would be sent to MET Norway as
-your identity, which is exactly what their terms exist to prevent. Without it,
-the weather tool returns a clear configuration error naming the variable, and
-every other tool keeps working.
+your identity, which is exactly what their terms exist to prevent. Do not insert
+a fake email. Without it, the weather tool returns a clear configuration error
+naming the variable, tool discovery is unaffected, and every other tool keeps
+working.
 
 An invalid value never crashes the server: it falls back to the documented
 default and is reported by `--doctor`.
 
 ## Tool catalogue
 
-Ten curated read-only tools. Names are stable, language-neutral identifiers.
-
-| Tool                                 | Answers                                           | Providers                          | Config              | Default / max output  |
-| ------------------------------------ | ------------------------------------------------- | ---------------------------------- | ------------------- | --------------------- |
-| `search_norwegian_companies`         | Find organizations and their organization numbers | Brønnøysundregistrene              | —                   | 10 / 50 results       |
-| `get_norwegian_company_profile`      | Full detail for one organization number           | Brønnøysundregistrene + Kartverket | —                   | 1 organization        |
-| `search_norwegian_addresses`         | Find, verify or disambiguate an address           | Kartverket                         | —                   | 10 / 50 addresses     |
-| `get_norwegian_location_profile`     | Conditions, warnings and roads at one address     | Kartverket + MET + NVE + Vegvesen  | _email for weather_ | 20 hazards, 25 roads  |
-| `get_norwegian_municipality_profile` | Population, life expectancy, businesses, hazards  | SSB + FHI + Brreg + NVE            | —                   | 1 municipality        |
-| `get_norwegian_weather_forecast`     | Hourly forecast for a coordinate                  | MET Norway                         | **email required**  | 24 / 96 hours         |
-| `get_current_norwegian_hazards`      | Official flood, avalanche and landslide warnings  | NVE (Varsom)                       | —                   | 25 / 100 warnings     |
-| `get_norwegian_electricity_prices`   | Hourly spot prices for a bidding zone             | Hva koster strømmen?               | —                   | 23–25 hours (one day) |
-| `get_norwegian_transport_departures` | Next departures from a stop                       | Entur                              | —                   | 10 / 50 departures    |
-| `query_norwegian_statistics`         | Statistics Norway tables                          | SSB                                | —                   | 100 / 500 rows        |
-
-Full contracts — input schemas, hard limits, warnings, error behaviour and
-worked routing examples — are in
+Ten curated read-only tools, grouped below by purpose. Tool **names** are stable,
+language-neutral identifiers and are never translated. Full contracts — input
+schemas, hard limits, warnings and error behaviour — are in
 [docs/tool-catalogue.md](docs/tool-catalogue.md).
+
+### Companies and profiles
+
+| Tool                            | Purpose                                           | Source                             | Config | Default / max   |
+| ------------------------------- | ------------------------------------------------- | ---------------------------------- | ------ | --------------- |
+| `search_norwegian_companies`    | Find organizations and their organization numbers | Brønnøysundregistrene              | —      | 10 / 50 results |
+| `get_norwegian_company_profile` | Full detail for one organization number           | Brønnøysundregistrene + Kartverket | —      | 1 organization  |
+
+### Addresses and places
+
+| Tool                                 | Purpose                                          | Source                                    | Config              | Default / max        |
+| ------------------------------------ | ------------------------------------------------ | ----------------------------------------- | ------------------- | -------------------- |
+| `search_norwegian_addresses`         | Find, verify or disambiguate an address          | Kartverket                                | —                   | 10 / 50 addresses    |
+| `get_norwegian_location_profile`     | Conditions, warnings and roads at one address    | Kartverket + MET + NVE + Statens vegvesen | _email for weather_ | 20 hazards, 25 roads |
+| `get_norwegian_municipality_profile` | Population, life expectancy, businesses, hazards | SSB + FHI + Brønnøysundregistrene + NVE   | —                   | 1 municipality       |
+
+### Weather and hazards
+
+| Tool                             | Purpose                                          | Source       | Config             | Default / max     |
+| -------------------------------- | ------------------------------------------------ | ------------ | ------------------ | ----------------- |
+| `get_norwegian_weather_forecast` | Hourly forecast for a coordinate                 | MET Norway   | **email required** | 24 / 96 hours     |
+| `get_current_norwegian_hazards`  | Official flood, avalanche and landslide warnings | NVE (Varsom) | —                  | 25 / 100 warnings |
+
+### Electricity and transport
+
+| Tool                                 | Purpose                               | Source               | Config | Default / max         |
+| ------------------------------------ | ------------------------------------- | -------------------- | ------ | --------------------- |
+| `get_norwegian_electricity_prices`   | Hourly spot prices for a bidding zone | Hva koster strømmen? | —      | 23–25 hours (one day) |
+| `get_norwegian_transport_departures` | Next departures from a stop           | Entur                | —      | 10 / 50 departures    |
+
+### Official statistics
+
+| Tool                         | Purpose                                     | Source | Config | Default / max  |
+| ---------------------------- | ------------------------------------------- | ------ | ------ | -------------- |
+| `query_norwegian_statistics` | Discover and query Statistics Norway tables | SSB    | —      | 100 / 500 rows |
 
 ### Why ten tools and not fifty-five
 
@@ -249,12 +282,29 @@ given 10 distinct ones. Every method that was considered and deferred is
 recorded, with the reason, in
 [docs/capability-matrix.md](docs/capability-matrix.md).
 
-Three tools are **compositions** rather than method wrappers: departures
-resolves a stop name before fetching the board, hazards merges three warning
-feeds, and the statistics tool serves both table discovery and data through one
-schema.
+Three tools are **compositions** rather than method wrappers: departures resolves
+a stop name before fetching the board, hazards merges three warning feeds, and
+the statistics tool serves both table discovery and data through one schema.
 
-### Every result carries its source
+## Usage examples
+
+You interact with these tools through your AI client in plain language — you do
+not call them directly. Because the tool names are language-neutral, the
+assistant routes correctly whether you write in English or Norwegian. A few
+things you could ask:
+
+- Find Norwegian companies named Equinor. _(“Finn bedrifter som heter Equinor”)_
+- Verify an address in Oslo and show its coordinates.
+- Build a full profile for organization number `923609016`.
+- Show current flood, avalanche and landslide warnings for a location.
+- Show the next departures from a transport stop. _(“Vis avganger fra Oslo S”)_
+- Query a specific Statistics Norway table, such as population by municipality.
+
+The server only reads and returns public data. It never performs actions, writes
+data, or makes changes on your behalf. And an empty hazard response is **not** an
+authoritative all-clear — see [Limitations](#limitations).
+
+## Every result carries its source
 
 ```jsonc
 {
@@ -277,26 +327,26 @@ schema.
 }
 ```
 
-Attribution, timestamps and cache status come from the SDK; nothing is
-invented. Truncation is **never silent** — any shortened list is reported both
-structurally and in prose.
+Attribution, timestamps and cache status come from the SDK; nothing is invented.
+Truncation is **never silent** — any shortened list is reported both structurally
+and in prose.
 
 ## Provider attribution
 
 Data comes from independently operated Norwegian public APIs, each with its own
 terms:
 
-| Provider                    | Licence (as declared by the provider)         |
-| --------------------------- | --------------------------------------------- |
-| Brønnøysundregistrene       | NLOD 2.0                                      |
-| Kartverket                  | Dataset-specific Geonorge terms               |
-| Statistics Norway (SSB)     | CC BY 4.0                                     |
-| Folkehelseinstituttet (FHI) | Per statistics bank                           |
-| MET Norway                  | NLOD 2.0 / CC BY 4.0 unless stated otherwise  |
-| NVE / Varsom                | NLOD 2.0                                      |
-| Entur                       | NLOD                                          |
-| Statens vegvesen            | NLOD 2.0                                      |
-| Hva koster strømmen?        | Open and free; no standardised licence stated |
+| Provider                                             | Licence (as declared by the provider)         |
+| ---------------------------------------------------- | --------------------------------------------- |
+| Brønnøysundregistrene                                | NLOD 2.0                                      |
+| Kartverket                                           | Dataset-specific Geonorge terms               |
+| Statistisk sentralbyrå (SSB)                         | CC BY 4.0                                     |
+| Folkehelseinstituttet (FHI)                          | Per statistics bank                           |
+| MET Norway                                           | NLOD 2.0 / CC BY 4.0 unless stated otherwise  |
+| Norges vassdrags- og energidirektorat (NVE / Varsom) | NLOD 2.0                                      |
+| Entur                                                | NLOD                                          |
+| Statens vegvesen                                     | NLOD 2.0                                      |
+| Hva koster strømmen?                                 | Open and free; no standardised licence stated |
 
 This project is an independent open-source effort and is **not affiliated with,
 sponsored by or endorsed by** any Norwegian public authority or by Hva koster
@@ -311,13 +361,14 @@ strømmen?. The MIT licence covers this source code only, never the data. See
 - Requests go directly from your machine to the relevant public-data provider.
   Those providers see your IP address and the caller identity you configure.
 - **Nothing is persisted.** The optional response cache is in-process only and
-  dies with the process. No tool input, tool result or conversation content is
+  ends with the process. No tool input, tool result or conversation content is
   ever written to disk.
 - Credentials are redacted from every result and every log line.
 - The server cannot read files, write files, execute commands or fetch
   caller-supplied URLs. All network access goes through the SDK.
 
-See [docs/privacy.md](docs/privacy.md) for the full model.
+See [docs/privacy.md](docs/privacy.md) for the full model and
+[docs/architecture.md](docs/architecture.md) for the design.
 
 ## Rate limits
 
@@ -429,13 +480,22 @@ Live provider tests are opt-in and bounded:
 pnpm test:live   # requires RUN_LIVE_TESTS=true; low-volume by design
 ```
 
+## Norway Open Data ecosystem
+
+- [Norway Open Data SDK](https://github.com/iamkm1/Norway-Open-Data) — a typed
+  TypeScript SDK for Norwegian public APIs (provider integrations, validation,
+  retries, caching and typed responses).
+- **Norway Open Data MCP** (this package) — curated MCP tools built on top of
+  the SDK, so AI clients can use Norwegian public data over stdio.
+
 ## Limitations
 
 Stated plainly, because a tool that overstates its coverage is worse than one
 that admits its edges:
 
 - **Hazard results are never an all-clear.** They are a discovery summary. An
-  empty list does not mean an area is safe. Use varsom.no for safety decisions.
+  empty list does not mean an area is safe. Use
+  [varsom.no](https://varsom.no) for all safety decisions.
 - **Not exposed in v0.1:** journey planning, open-dataset catalogue search
   (Data.norge), exchange rates and policy rates (Norges Bank), FHI health tables
   beyond the municipality profile, NVDB road querying, parliamentary data

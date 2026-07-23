@@ -4,7 +4,7 @@ All notable changes to this project are documented here. This project follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html); see the versioning
 policy in the README for what "breaking" means before 1.0.
 
-## 0.1.0 — unreleased
+## 0.1.0 — 2026-07-24
 
 Initial release.
 

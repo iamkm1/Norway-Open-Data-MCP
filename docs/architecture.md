@@ -200,12 +200,12 @@ loudly if a future change introduces an HTTP path.
 | Test            | Vitest 4 | Native ESM + TS, v8 coverage, no transform config.                                                                                                                          |
 | Package manager | pnpm 11  | Strict node_modules layout catches undeclared-dependency bugs before publish.                                                                                               |
 
-## Why the tool count is 10, not 55
+## Why the tool count is 10, not one per SDK method
 
-The SDK exposes 55 public methods. A 55-tool server is unusable: tool
-descriptions are routing instructions, and an AI model given 55 overlapping
-options routes worse than one given 10 distinct ones. Selection criteria, in
-priority order:
+The SDK exposes 55+ public methods across 15 namespaces. A server with one tool
+per method is unusable: tool descriptions are routing instructions, and an AI
+model given dozens of overlapping options routes worse than one given 10
+distinct ones. Selection criteria, in priority order:
 
 1. Answers a question a person actually asks about Norway.
 2. Distinct enough that a model can choose it without ambiguity.

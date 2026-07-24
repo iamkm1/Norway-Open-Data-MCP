@@ -53,12 +53,12 @@ package ([source](https://github.com/iamkm1/Norway-Open-Data)), exactly like any
 other application. It does not vendor, fork or modify the SDK, and the two are
 separate packages and separate repositories.
 
-|                                        | Norway Open Data SDK      | Norway Open Data MCP (this package) |
-| -------------------------------------- | ------------------------- | ----------------------------------- |
-| What it is                             | A TypeScript library      | An MCP server                       |
-| Used by                                | Your own code             | AI assistants, via MCP              |
-| Surface                                | 15 namespaces, 55 methods | 10 curated tools                    |
-| Network, retries, caching, rate limits | Owned by the SDK          | Delegated to the SDK                |
+|                                        | Norway Open Data SDK       | Norway Open Data MCP (this package) |
+| -------------------------------------- | -------------------------- | ----------------------------------- |
+| What it is                             | A TypeScript library       | An MCP server                       |
+| Used by                                | Your own code              | AI assistants, via MCP              |
+| Surface                                | 15 namespaces, 55+ methods | 10 curated tools                    |
+| Network, retries, caching, rate limits | Owned by the SDK           | Delegated to the SDK                |
 
 The SDK's retry, cache and rate-limit behaviour is used as-is and deliberately
 not reimplemented here.
@@ -79,10 +79,9 @@ not reimplemented here.
 │                                   norway-open-data-sdk       │
 └──────────────────────────────────────────────────┼───────────┘
                                                    │ HTTPS (outbound only)
-        ┌──────────┬──────────┬──────────┬─────────┴────┬──────────────┐
-        ▼          ▼          ▼          ▼              ▼              ▼
-   Brønnøysund  Kartverket  MET Norway  NVE/Varsom     SSB          Entur
-   registrene                                                 Hva koster strømmen?
+                                                   ▼
+   Brønnøysundregistrene · Kartverket · SSB · FHI · MET Norway · NVE (Varsom)
+   Entur · Statens vegvesen · Hva koster strømmen?
 ```
 
 No hosted backend · no HTTP listener · no database · no accounts · no telemetry
@@ -94,7 +93,8 @@ No hosted backend · no HTTP listener · no database · no accounts · no teleme
   full-ICU build so Europe/Oslo dates resolve correctly — official Node builds
   are. `norway-open-data-mcp --doctor` checks this for you.
 - An MCP-compatible client.
-- No API key is required for nine of the ten tools.
+- **No API key is required by any tool.** One tool needs a contact email,
+  because MET Norway requires every caller to be identifiable.
 
 ## Installation
 
@@ -274,12 +274,12 @@ schemas, hard limits, warnings and error behaviour — are in
 | ---------------------------- | ------------------------------------------- | ------ | ------ | -------------- |
 | `query_norwegian_statistics` | Discover and query Statistics Norway tables | SSB    | —      | 100 / 500 rows |
 
-### Why ten tools and not fifty-five
+### Why ten tools and not one per SDK method
 
-The SDK exposes 55 public methods. Tool descriptions are routing instructions
-for a model, and a model given 55 overlapping options routes worse than one
-given 10 distinct ones. Every method that was considered and deferred is
-recorded, with the reason, in
+The SDK exposes 55+ public methods across 15 namespaces. Tool descriptions are
+routing instructions for a model, and a model given dozens of overlapping
+options routes worse than one given 10 distinct ones. Every method that was
+considered and deferred is recorded, with the reason, in
 [docs/capability-matrix.md](docs/capability-matrix.md).
 
 Three tools are **compositions** rather than method wrappers: departures resolves
@@ -523,6 +523,9 @@ that admits its edges:
 - The optional cache is in-process only and is not shared between restarts.
 
 ## Versioning policy
+
+Released versions are listed in [CHANGELOG.md](CHANGELOG.md) and on the
+[releases page](https://github.com/iamkm1/Norway-Open-Data-MCP/releases).
 
 This project follows [Semantic Versioning](https://semver.org). While the major
 version is `0`:

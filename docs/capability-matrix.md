@@ -4,8 +4,8 @@ Source of truth: the installed declarations of `norway-open-data-sdk@0.5.2`
 (`dist/index.d.ts`), its `PROVIDERS.md`, and the runtime `providerDescriptors`
 registry. Nothing in this document is inferred from the project brief.
 
-The SDK exposes **15 facade namespaces** and **55 public methods**. This matrix
-records every one of them and whether it is appropriate as an MCP tool.
+The SDK exposes **15 facade namespaces**. This matrix records every public
+method on them and whether it is appropriate as an MCP tool.
 
 ## Provider registry (runtime-verified)
 

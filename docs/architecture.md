@@ -19,7 +19,7 @@ runs anywhere else.
 │                                        │         log file  │ │
 │                                        └─────────┬─────────┘ │
 │                                                  │           │
-│                                   norway-open-data-sdk@0.5.2 │
+│                                   norway-open-data-sdk@0.5.3 │
 │                                                  │           │
 └──────────────────────────────────────────────────┼───────────┘
                                                    │ HTTPS (outbound only)
@@ -46,7 +46,7 @@ below it.
               ↓
         tool handlers            src/tools/*.ts
               ↓
-        Norway Open Data SDK     norway-open-data-sdk@0.5.2
+        Norway Open Data SDK     norway-open-data-sdk@0.5.3
               ↓
         public Norwegian APIs
 ```

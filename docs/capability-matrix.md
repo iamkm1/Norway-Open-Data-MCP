@@ -1,6 +1,6 @@
 # SDK capability matrix
 
-Source of truth: the installed declarations of `norway-open-data-sdk@0.5.2`
+Source of truth: the installed declarations of `norway-open-data-sdk@0.5.3`
 (`dist/index.d.ts`), its `PROVIDERS.md`, and the runtime `providerDescriptors`
 registry. Nothing in this document is inferred from the project brief.
 
@@ -28,7 +28,7 @@ Read from `providerDescriptors` at runtime on 2026-07-23.
 
 Two consequences drive the configuration design:
 
-- `applicationName` is satisfiable by this package itself (`norway-open-data-mcp/0.1.0`),
+- `applicationName` is satisfiable by this package itself (`norway-open-data-mcp/0.1.1`),
   so Entur and Statens vegvesen work with **zero user setup**.
 - `contactEmail` cannot be invented. MET Norway is therefore the one provider that
   is genuinely user-configured, and it is the reference case for the

@@ -210,7 +210,7 @@ Everything is optional. Nine of the ten tools work with no configuration.
 | Variable                   | Default                      | What it does                                                                                                                                                                    |
 | -------------------------- | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `NORWAY_MCP_CONTACT_EMAIL` | _(unset)_                    | **Required by MET Norway.** Enables `get_norwegian_weather_forecast` and the weather section of `get_norwegian_location_profile`. MET requires every caller to be identifiable. |
-| `NORWAY_MCP_APP_NAME`      | `norway-open-data-mcp/0.1.0` | Caller identity sent to Entur (`ET-Client-Name`) and Statens vegvesen (`X-Client`), and part of MET's User-Agent.                                                               |
+| `NORWAY_MCP_APP_NAME`      | `norway-open-data-mcp/0.1.1` | Caller identity sent to Entur (`ET-Client-Name`) and Statens vegvesen (`X-Client`), and part of MET's User-Agent.                                                               |
 | `NORWAY_MCP_NVE_API_KEY`   | _(unset)_                    | Free NVE HydAPI key. **No v0.1 tool needs it**; accepted for forward compatibility.                                                                                             |
 | `NORWAY_MCP_TIMEOUT_MS`    | `10000`                      | Request timeout, 1000–60000.                                                                                                                                                    |
 | `NORWAY_MCP_RETRIES`       | `2`                          | Retry attempts after the first, 0–5.                                                                                                                                            |
@@ -533,14 +533,14 @@ version is `0`:
 - **Patch** — fixes, validation corrections, documentation.
 - **Minor** — new tools, new optional inputs, new envelope fields. **A breaking
   change is also released as a minor version while the major is 0**, so pin
-  exactly (`norway-open-data-mcp@0.1.0`) if you depend on tool shapes.
+  exactly (`norway-open-data-mcp@0.1.1`) if you depend on tool shapes.
 - **Major** — reserved for 1.0 onwards.
 
 Treated as breaking: removing or renaming a tool, removing an input or output
 field, tightening an input schema, or changing a tool's meaning. Tool **names**
 are stable identifiers and are never translated.
 
-The `norway-open-data-sdk` dependency is pinned to `^0.5.2`. Because the SDK is
+The `norway-open-data-sdk` dependency is pinned to `^0.5.3`. Because the SDK is
 also pre-1.0, its own breaking changes ship as minor versions and are therefore
 **not** picked up by that caret range automatically — SDK upgrades are
 deliberate, reviewed changes here.

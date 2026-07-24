@@ -4,4 +4,4 @@ allowBuilds:
   esbuild: true
 
 minimumReleaseAgeExclude:
-  - norway-open-data-sdk@0.5.2
+  - norway-open-data-sdk@0.5.2 || 0.5.3

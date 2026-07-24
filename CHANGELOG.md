@@ -4,6 +4,21 @@ All notable changes to this project are documented here. This project follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html); see the versioning
 policy in the README for what "breaking" means before 1.0.
 
+## 0.1.1 — 2026-07-24
+
+Maintenance release. No new tools, no schema changes, no runtime behaviour
+changes.
+
+### Changed
+
+- Require `norway-open-data-sdk@^0.5.3` (previously `^0.5.2`). SDK 0.5.3
+  corrects a population-aggregation bug in which incomplete SSB population cells
+  could be summed and reported as a complete municipality total. Because the SDK
+  is pre-1.0 and its breaking changes ship as minor versions, the caret floor is
+  raised deliberately so `get_norwegian_municipality_profile` can no longer
+  resolve against the affected SDK. A release guard fails the build if the
+  manifest or lockfile permits an SDK below 0.5.3.
+
 ## 0.1.0 — 2026-07-24
 
 Initial release.

@@ -33,6 +33,10 @@ jobs:
           node-version: 24
           # No dependency cache in the publishing job, on purpose: a cache is
           # attacker-influenceable state that must not sit in the publish path.
+          # This must be explicit — setup-node's package-manager cache defaults
+          # to on, and it runs `pnpm` before Corepack has provisioned it, which
+          # otherwise fails this step outright.
+          package-manager-cache: false
 
       - name: Enable Corepack (provisions pnpm from packageManager)
         run: corepack enable pnpm

@@ -29,7 +29,7 @@ Read from `providerDescriptors` at runtime on 2026-07-23.
 
 Two consequences drive the configuration design:
 
-- `applicationName` is satisfiable by this package itself (`norway-open-data-mcp/0.1.1`),
+- `applicationName` is satisfiable by this package itself (`norway-open-data-mcp/0.2.0`),
   so Entur and Statens vegvesen work with **zero user setup**.
 - `contactEmail` cannot be invented. MET Norway is therefore the one provider that
   is genuinely user-configured, and it is the reference case for the

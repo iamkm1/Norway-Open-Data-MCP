@@ -4,9 +4,10 @@ All notable changes to this project are documented here. This project follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html); see the versioning
 policy in the README for what "breaking" means before 1.0.
 
-## [Unreleased] — 0.2.0
+## 0.2.0 — 2026-07-25
 
-Not yet published. Adds curated SSB Klass support.
+Adds curated SSB Klass support. The curated tool set grows from 10 to 12; no
+existing tool changes, and no new credential is introduced.
 
 ### Added
 

@@ -15,9 +15,9 @@ Nothing else is contacted. There is no intermediate service, no proxy and no
 analytics endpoint owned by this project.
 
 The public-data providers you query — Brønnøysundregistrene, Kartverket, MET
-Norway, NVE, SSB, FHI, Entur, Statens vegvesen, Hva koster strømmen? — receive
-a direct HTTPS request from your machine, exactly as if you had opened their
-website. They can see:
+Norway, NVE, SSB, SSB Klass, FHI, Entur, Statens vegvesen, Hva koster strømmen?
+— receive a direct HTTPS request from your machine, exactly as if you had opened
+their website. They can see:
 
 - your IP address;
 - the caller identity you configured (`NORWAY_MCP_APP_NAME`, and
@@ -61,7 +61,8 @@ it, at the cost of more provider requests.
 
 The only credentials this server accepts are `NORWAY_MCP_CONTACT_EMAIL` (an
 identity MET Norway requires, not a secret) and `NORWAY_MCP_NVE_API_KEY` (a free
-key that no v0.1 tool currently uses).
+key that no shipped tool currently uses). The SSB Klass tools add **no** new
+credential or environment variable: Klass is anonymous.
 
 Both are:
 

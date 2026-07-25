@@ -1,6 +1,6 @@
 # SDK capability matrix
 
-Source of truth: the installed declarations of `norway-open-data-sdk@0.5.3`
+Source of truth: the installed declarations of `norway-open-data-sdk@0.6.0`
 (`dist/index.d.ts`), its `PROVIDERS.md`, and the runtime `providerDescriptors`
 registry. Nothing in this document is inferred from the project brief.
 
@@ -11,20 +11,21 @@ method on them and whether it is appropriate as an MCP tool.
 
 Read from `providerDescriptors` at runtime on 2026-07-23.
 
-| Provider id         | Name                  | Access                  | `auth.requires`                   | Budget                    |
-| ------------------- | --------------------- | ----------------------- | --------------------------------- | ------------------------- |
-| `brreg`             | Brønnøysundregistrene | open                    | —                                 | 60/min (courtesy)         |
-| `data-norge`        | Data.norge.no         | open                    | —                                 | 10/min search, 5/s lookup |
-| `entur`             | Entur                 | identification-required | `applicationName`                 | 60/min (courtesy)         |
-| `fhi`               | FHI                   | open                    | —                                 | 30/min (courtesy)         |
-| `hvakosterstrommen` | Hva koster strømmen?  | open                    | —                                 | 30/min (courtesy)         |
-| `kartverket`        | Kartverket            | open                    | —                                 | 60/min (courtesy)         |
-| `met`               | MET Norway            | identification-required | `applicationName`, `contactEmail` | 60/min (courtesy)         |
-| `norges-bank`       | Norges Bank           | open                    | —                                 | 60/min (courtesy)         |
-| `nve`               | NVE                   | registration-required   | `apiKey` (HydAPI methods only)    | 30/min (courtesy)         |
-| `ssb`               | Statistics Norway     | open                    | —                                 | 30/min (documented)       |
-| `stortinget`        | Stortinget            | open                    | —                                 | 100/min (documented)      |
-| `vegvesen`          | Statens vegvesen      | identification-required | `applicationName`                 | 60/min (courtesy)         |
+| Provider id         | Name                    | Access                  | `auth.requires`                   | Budget                    |
+| ------------------- | ----------------------- | ----------------------- | --------------------------------- | ------------------------- |
+| `brreg`             | Brønnøysundregistrene   | open                    | —                                 | 60/min (courtesy)         |
+| `data-norge`        | Data.norge.no           | open                    | —                                 | 10/min search, 5/s lookup |
+| `entur`             | Entur                   | identification-required | `applicationName`                 | 60/min (courtesy)         |
+| `fhi`               | FHI                     | open                    | —                                 | 30/min (courtesy)         |
+| `hvakosterstrommen` | Hva koster strømmen?    | open                    | —                                 | 30/min (courtesy)         |
+| `kartverket`        | Kartverket              | open                    | —                                 | 60/min (courtesy)         |
+| `met`               | MET Norway              | identification-required | `applicationName`, `contactEmail` | 60/min (courtesy)         |
+| `norges-bank`       | Norges Bank             | open                    | —                                 | 60/min (courtesy)         |
+| `nve`               | NVE                     | registration-required   | `apiKey` (HydAPI methods only)    | 30/min (courtesy)         |
+| `ssb`               | Statistics Norway       | open                    | —                                 | 30/min (documented)       |
+| `ssb-klass`         | Statistics Norway Klass | open                    | —                                 | 30/min (courtesy)         |
+| `stortinget`        | Stortinget              | open                    | —                                 | 100/min (documented)      |
+| `vegvesen`          | Statens vegvesen        | identification-required | `applicationName`                 | 60/min (courtesy)         |
 
 Two consequences drive the configuration design:
 
@@ -38,7 +39,7 @@ Two consequences drive the configuration design:
 
 ## Method matrix
 
-Columns: **Tool?** = exposed as / used by an MCP tool in v0.1.
+Columns: **Tool?** = exposed as / used by an MCP tool.
 **Cred** = requires configuration beyond the built-in `applicationName`.
 
 ### `companies` — `BrregClient` (brreg)
@@ -126,7 +127,35 @@ Both halves are served by **one** tool, `query_norwegian_statistics`, because
 the table's dimensions and valid codes; supplying them returns dimensions **and**
 rows. One output schema, one provider call per invocation, no mode ambiguity.
 
-### Namespaces deferred entirely in v0.1
+### `klass` — `KlassClient` (ssb-klass)
+
+The Klass namespace has **14** methods. Two curated tools use **four** of them;
+the other ten are deferred. Klass is a separate service from SSB PxWeb
+(`statistics`): it publishes official code lists and their history, not numbers.
+
+| Method                        | Purpose                                  | Input                               | Cred | Size    | Tool?                                                   |
+| ----------------------------- | ---------------------------------------- | ----------------------------------- | ---- | ------- | ------------------------------------------------------- |
+| `resolveMunicipalityCode(p)`  | Municipality code across reforms         | code/targetDate/sourceDate/language | no   | small   | **yes** — `resolve_norwegian_administrative_code`       |
+| `resolveCountyCode(p)`        | County code across reforms               | code/targetDate/sourceDate/language | no   | small   | **yes** — `resolve_norwegian_administrative_code`       |
+| `searchCodes(p)`              | Code-pattern (`selectCodes`) search      | classificationId/codePattern/date   | no   | bounded | **yes** — `search_norwegian_classification_codes`       |
+| `getCode(p)`                  | Exact dated code lookup                  | classificationId/code/date          | no   | 1 code  | **yes** — exact path of the code-search tool            |
+| `listClassifications(p)`      | Browse classifications/codelists         | paging                              | no   | list    | no — discovery browsing; a poor MCP routing fit         |
+| `searchClassifications(p)`    | Full-text classification metadata search | query                               | no   | list    | no — returns classifications, not codes                 |
+| `getClassification(p)`        | One classification + its versions        | classificationId                    | no   | medium  | no — internal to resolution; not a user question        |
+| `listVersions(p)`             | Version summaries of a classification    | classificationId                    | no   | list    | no — expert browsing                                    |
+| `getVersion(p)`               | One version's metadata                   | versionId                           | no   | medium  | no — expert browsing                                    |
+| `listCodes(p)`                | Full code list for a version/date/range  | classificationId + date/version     | no   | large   | no — unbounded browse; `searchCodes` is the bounded fit |
+| `listCorrespondenceTables(p)` | Correspondence tables on a version       | versionId                           | no   | list    | no — expert mapping                                     |
+| `getCorrespondenceTable(p)`   | One fixed correspondence table           | correspondenceTableId               | no   | medium  | no — expert mapping                                     |
+| `getCorrespondence(p)`        | Fixed/dated/ranged correspondence        | source/target/date or table         | no   | medium  | no — correspondence needs human judgement               |
+| `listCodeChanges(p)`          | Code-change graph edges between dates    | classificationId/from/to            | no   | list    | no — surfaced inside resolution as `changes[]`          |
+
+The two tools deliberately do **not** expose raw correspondence tables or
+arbitrary code-list browsing. Merge/split/ambiguous resolutions keep every
+official branch and never auto-select; administrative correspondence is not
+evidence of statistical comparability.
+
+### Namespaces deferred entirely
 
 | Namespace                 | Methods | Why deferred                                                                                                                  |
 | ------------------------- | ------- | ----------------------------------------------------------------------------------------------------------------------------- |
@@ -134,7 +163,7 @@ rows. One output schema, one provider call per invocation, no mode ambiguity.
 | `catalog` (data-norge)    | 5       | Provider documents its search API as an internal, changeable interface. Deferred rather than shipped on an unstable contract. |
 | `currency` (norges-bank)  | 4       | Valuable but outside the "Norwegian public data" core intent; would add a 4th finance-shaped tool for little routing gain.    |
 | `energy` (nve)            | 4       | `getPowerPlants` returns the full national fleet — a poor output-budget fit without filters the SDK does not offer.           |
-| `parliament` (stortinget) | 9       | Strong candidate for v0.2; cut to stay inside the 8–10 budget.                                                                |
+| `parliament` (stortinget) | 9       | Strong candidate for a later release; cut to keep the tool set routable.                                                      |
 | `roads` (vegvesen)        | 7       | Surfaced indirectly through the location profile; standalone NVDB querying is expert-level.                                   |
 | `places` (kartverket)     | 2       | Routing overlap with address search.                                                                                          |
 
@@ -147,9 +176,14 @@ rows. One output schema, one provider call per invocation, no mode ambiguity.
   profile's `lifeExpectancy.flag` / `flagMeaning`; never reconstructed.
 - **Electricity is a third-party derived API**, not an official government
   endpoint, and excludes grid rent, taxes and surcharges.
-- **Norges Bank rates are indicative** — not exposed in v0.1.
+- **Norges Bank rates are indicative** — not exposed.
 - **Location-profile roads** are first-page bounding-box candidates, not a radius
   query; `roadSearch` bounds are preserved.
 - **Data.norge catalogue inclusion is not a reuse licence.**
-- **`includeRaw` is never exposed** in v0.1, per the brief and because the SDK
+- **`includeRaw` is never exposed**, per the brief and because the SDK
   documents raw shapes as structurally unstable.
+- **Klass administrative correspondence is not statistical comparability.** A
+  merge, split or ambiguous mapping keeps every official branch and is never
+  reduced to one code; the tool never combines populations or other figures.
+- **Klass code search is code-pattern search**, not name/full-text search; the
+  official API exposes no code-name search endpoint.

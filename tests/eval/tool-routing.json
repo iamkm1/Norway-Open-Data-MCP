@@ -470,6 +470,66 @@
       "reason": "The request exceeds the tool's 96-hour maximum, which must be clamped rather than refused outright.",
       "requiredArguments": { "latitude": 63.43, "longitude": 10.39, "hours": 96 },
       "expectedClarification": "Explain that at most 96 hourly entries are returned, and that MET's resolution declines beyond a few days."
+    },
+    {
+      "id": "klass-resolve-municipality-historical-en",
+      "question": "Municipality number 1142 is old — which municipality covers it now, and was it a merge?",
+      "language": "en",
+      "expectedTool": "resolve_norwegian_administrative_code",
+      "mustNotSelect": [
+        "get_norwegian_municipality_profile",
+        "search_norwegian_classification_codes"
+      ],
+      "reason": "The question is about a boundary change over time (what replaced an old code), not statistics or a code-list lookup.",
+      "requiredArguments": { "kind": "municipality", "code": "1142", "targetDate": "2024-01-01" }
+    },
+    {
+      "id": "klass-resolve-county-split-no",
+      "question": "Hva ble det gamle fylket 30 (Viken) delt opp i?",
+      "language": "no",
+      "expectedTool": "resolve_norwegian_administrative_code",
+      "mustNotSelect": ["search_norwegian_classification_codes"],
+      "reason": "A county reorganisation split is exactly what the administrative-code resolver returns, with every successor kept.",
+      "requiredArguments": { "kind": "county", "code": "30", "targetDate": "2024-01-01" }
+    },
+    {
+      "id": "klass-resolve-municipality-current-no",
+      "question": "Er kommunenummer 5001 fortsatt gyldig, eller ble det endret?",
+      "language": "no",
+      "expectedTool": "resolve_norwegian_administrative_code",
+      "mustNotSelect": ["get_norwegian_municipality_profile"],
+      "reason": "Asking whether an administrative code is still current is a resolution question, not a request for municipality statistics.",
+      "requiredArguments": { "kind": "municipality", "code": "5001", "targetDate": "2024-01-01" }
+    },
+    {
+      "id": "klass-search-occupation-prefix-en",
+      "question": "Which STYRK occupation codes begin with 25?",
+      "language": "en",
+      "expectedTool": "search_norwegian_classification_codes",
+      "mustNotSelect": ["query_norwegian_statistics", "resolve_norwegian_administrative_code"],
+      "reason": "A code-pattern query against an official classification, not a statistics table query.",
+      "requiredArguments": { "classificationId": 7, "codePattern": "25*" }
+    },
+    {
+      "id": "klass-search-municipality-codelist-no",
+      "question": "Hva heter kommune 0301 i den offisielle kodelisten fra SSB?",
+      "language": "no",
+      "expectedTool": "search_norwegian_classification_codes",
+      "mustNotSelect": [
+        "get_norwegian_municipality_profile",
+        "resolve_norwegian_administrative_code"
+      ],
+      "reason": "A straight code-to-name lookup in a classification, not a profile or a change-over-time resolution.",
+      "requiredArguments": { "classificationId": 131, "codePattern": "0301" }
+    },
+    {
+      "id": "klass-search-industry-range-en",
+      "question": "List the official industry (SN) codes in the range 01 to 05.",
+      "language": "en",
+      "expectedTool": "search_norwegian_classification_codes",
+      "mustNotSelect": ["query_norwegian_statistics"],
+      "reason": "A bounded code-pattern range query over an official classification, not a statistics query.",
+      "requiredArguments": { "classificationId": 6, "codePattern": "01-05" }
     }
   ]
 }

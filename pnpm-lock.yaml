@@ -12,8 +12,8 @@ importers:
         specifier: ^1.29.0
         version: 1.29.0(supports-color@7.2.0)(zod@4.4.3)
       norway-open-data-sdk:
-        specifier: ^0.5.3
-        version: 0.5.3
+        specifier: ^0.6.0
+        version: 0.6.0
       zod:
         specifier: ^4.1.13
         version: 4.4.3
@@ -1450,8 +1450,8 @@ packages:
     resolution: {integrity: sha512-8Ofs/AUQh8MaEcrlq5xOX0CQ9ypTF5dl78mjlMNfOK08fzpgTHQRQPBxcPlEtIw0yRpws+Zo/3r+5WRby7u3Gg==}
     engines: {node: '>= 0.6'}
 
-  norway-open-data-sdk@0.5.3:
-    resolution: {integrity: sha512-AcAKpTKmsP7eW2f2PqpvC/SIsZAOdWlIkjr+NVnzaOww95CPvOLqDK4K4v4jOv9TdWZlA6e5a8fezcrMf+Pk/Q==}
+  norway-open-data-sdk@0.6.0:
+    resolution: {integrity: sha512-6LCLOUPU5z1OTPjiiiB+j/viHoJsA1rJ1lAZNjSf57KAw0kkwf5J8vUyYZCJB+dwn4VXOydoPqHCRLUDRJXTUg==}
     engines: {node: '>=22'}
 
   object-assign@4.1.1:
@@ -3083,7 +3083,7 @@ snapshots:
 
   negotiator@1.0.0: {}
 
-  norway-open-data-sdk@0.5.3:
+  norway-open-data-sdk@0.6.0:
     dependencies:
       zod: 4.4.3
 

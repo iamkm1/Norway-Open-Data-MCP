@@ -17,7 +17,7 @@ declares.
 
 ## Unit tests — per tool
 
-Each of the ten tools is tested for the full matrix required by the brief:
+Each of the twelve tools is tested for the full matrix required by the brief:
 
 1. valid request
 2. minimum input (only required fields)

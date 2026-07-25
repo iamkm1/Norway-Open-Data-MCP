@@ -57,7 +57,7 @@ separate packages and separate repositories.
 | -------------------------------------- | -------------------------- | ----------------------------------- |
 | What it is                             | A TypeScript library       | An MCP server                       |
 | Used by                                | Your own code              | AI assistants, via MCP              |
-| Surface                                | 15 namespaces, 55+ methods | 10 curated tools                    |
+| Surface                                | 15 namespaces, 55+ methods | 12 curated tools                    |
 | Network, retries, caching, rate limits | Owned by the SDK           | Delegated to the SDK                |
 
 The SDK's retry, cache and rate-limit behaviour is used as-is and deliberately
@@ -205,7 +205,7 @@ Configuration**). VS Code uses `servers`, not `mcpServers`:
 
 ## Environment variables
 
-Everything is optional. Nine of the ten tools work with no configuration.
+Everything is optional. Eleven of the twelve tools work with no configuration.
 
 | Variable                   | Default                      | What it does                                                                                                                                                                    |
 | -------------------------- | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -234,9 +234,9 @@ default and is reported by `--doctor`.
 
 ## Tool catalogue
 
-Ten curated read-only tools, grouped below by purpose. Tool **names** are stable,
-language-neutral identifiers and are never translated. Full contracts — input
-schemas, hard limits, warnings and error behaviour — are in
+Twelve curated read-only tools, grouped below by purpose. Tool **names** are
+stable, language-neutral identifiers and are never translated. Full contracts —
+input schemas, hard limits, warnings and error behaviour — are in
 [docs/tool-catalogue.md](docs/tool-catalogue.md).
 
 ### Companies and profiles
@@ -274,17 +274,33 @@ schemas, hard limits, warnings and error behaviour — are in
 | ---------------------------- | ------------------------------------------- | ------ | ------ | -------------- |
 | `query_norwegian_statistics` | Discover and query Statistics Norway tables | SSB    | —      | 100 / 500 rows |
 
-### Why ten tools and not one per SDK method
+### Classifications and administrative codes (SSB Klass)
 
-The SDK exposes 55+ public methods across 15 namespaces. Tool descriptions are
-routing instructions for a model, and a model given dozens of overlapping
-options routes worse than one given 10 distinct ones. Every method that was
-considered and deferred is recorded, with the reason, in
+| Tool                                    | Purpose                                                          | Source    | Config | Default / max        |
+| --------------------------------------- | ---------------------------------------------------------------- | --------- | ------ | -------------------- |
+| `resolve_norwegian_administrative_code` | Track a municipality or county code across renames/merges/splits | SSB Klass | —      | all official matches |
+| `search_norwegian_classification_codes` | Look up codes in an official classification by code pattern      | SSB Klass | —      | 10 / 20 codes        |
+
+SSB Klass is a **separate service** from the SSB statistics (PxWeb) API behind
+`query_norwegian_statistics`: Klass publishes the official _code lists_
+(municipalities, counties, industry, occupations, …) and their history, while
+PxWeb publishes the _numbers_. Klass access is anonymous — no key, no new
+environment variable.
+
+### Why twelve tools and not one per SDK method
+
+The SDK exposes 55+ public methods across 15 namespaces — including 14 in its
+`klass` namespace alone. Tool descriptions are routing instructions for a model,
+and a model given dozens of overlapping options routes worse than one given a
+dozen distinct ones. So only two curated Klass tools are exposed, not fourteen.
+Every method that was considered and deferred is recorded, with the reason, in
 [docs/capability-matrix.md](docs/capability-matrix.md).
 
 Three tools are **compositions** rather than method wrappers: departures resolves
 a stop name before fetching the board, hazards merges three warning feeds, and
-the statistics tool serves both table discovery and data through one schema.
+the statistics tool serves both table discovery and data through one schema. The
+classification-code search likewise routes an exact code to a precise lookup and
+a pattern to a code search behind one contract.
 
 ## Usage examples
 
@@ -299,6 +315,8 @@ things you could ask:
 - Show current flood, avalanche and landslide warnings for a location.
 - Show the next departures from a transport stop. _(“Vis avganger fra Oslo S”)_
 - Query a specific Statistics Norway table, such as population by municipality.
+- What replaced the old municipality number 1142, and was it a merge or a split?
+- Which STYRK occupation codes begin with 25? _(“Hvilke yrkeskoder starter på 25?”)_
 
 The server only reads and returns public data. It never performs actions, writes
 data, or makes changes on your behalf. And an empty hazard response is **not** an
@@ -341,6 +359,7 @@ terms:
 | Brønnøysundregistrene                                | NLOD 2.0                                      |
 | Kartverket                                           | Dataset-specific Geonorge terms               |
 | Statistisk sentralbyrå (SSB)                         | CC BY 4.0                                     |
+| Statistisk sentralbyrå (SSB) Klass                   | CC BY 4.0                                     |
 | Folkehelseinstituttet (FHI)                          | Per statistics bank                           |
 | MET Norway                                           | NLOD 2.0 / CC BY 4.0 unless stated otherwise  |
 | Norges vassdrags- og energidirektorat (NVE / Varsom) | NLOD 2.0                                      |
@@ -496,12 +515,24 @@ that admits its edges:
 - **Hazard results are never an all-clear.** They are a discovery summary. An
   empty list does not mean an area is safe. Use
   [varsom.no](https://varsom.no) for all safety decisions.
-- **Not exposed in v0.1:** journey planning, open-dataset catalogue search
+- **Not exposed as tools:** journey planning, open-dataset catalogue search
   (Data.norge), exchange rates and policy rates (Norges Bank), FHI health tables
   beyond the municipality profile, NVDB road querying, parliamentary data
-  (Stortinget), power plants and reservoir levels, and NVE HydAPI. All are
+  (Stortinget), power plants and reservoir levels, NVE HydAPI, and the ten SSB
+  Klass methods beyond the two curated ones (correspondence tables, code
+  changes, and full classification/version/code-list browsing). All are
   supported by the SDK; they were cut to keep the tool set routable. See
   [docs/capability-matrix.md](docs/capability-matrix.md).
+- **Classification-code search is code-pattern search**, not name or full-text
+  search. You match by code (`0301`), wildcard (`25*`), range (`01-05`) or list,
+  never by a place or category name.
+- **Administrative-code resolution never combines statistics.** It returns every
+  official candidate and preserves the SDK's status (unchanged, renamed,
+  replaced, merged, split, ambiguous, not_found, context_required). A merge,
+  split or ambiguous mapping needs application or human judgement, and
+  administrative correspondence does **not** by itself prove that statistics for
+  the areas are comparable. SSB Klass and SSB PxWeb statistics are separate
+  services.
 - **`includeRaw` is not exposed.** The SDK documents raw provider payloads as
   structurally unstable.
 - **Electricity prices come from a third party**, not an official government
@@ -540,7 +571,7 @@ Treated as breaking: removing or renaming a tool, removing an input or output
 field, tightening an input schema, or changing a tool's meaning. Tool **names**
 are stable identifiers and are never translated.
 
-The `norway-open-data-sdk` dependency is pinned to `^0.5.3`. Because the SDK is
+The `norway-open-data-sdk` dependency is pinned to `^0.6.0`. Because the SDK is
 also pre-1.0, its own breaking changes ship as minor versions and are therefore
 **not** picked up by that caret range automatically — SDK upgrades are
 deliberate, reviewed changes here.

@@ -19,13 +19,13 @@ runs anywhere else.
 │                                        │         log file  │ │
 │                                        └─────────┬─────────┘ │
 │                                                  │           │
-│                                   norway-open-data-sdk@0.5.3 │
+│                                   norway-open-data-sdk@0.6.0 │
 │                                                  │           │
 └──────────────────────────────────────────────────┼───────────┘
                                                    │ HTTPS (outbound only)
                         ┌──────────────────────────┴────────────────────┐
                         ▼                ▼               ▼              ▼
-                  Brønnøysund-      Kartverket       MET Norway       SSB
+                  Brønnøysund-      Kartverket       MET Norway    SSB · SSB Klass
                   registrene         Entur            NVE       Hva koster strømmen?
 ```
 
@@ -46,7 +46,7 @@ below it.
               ↓
         tool handlers            src/tools/*.ts
               ↓
-        Norway Open Data SDK     norway-open-data-sdk@0.5.3
+        Norway Open Data SDK     norway-open-data-sdk@0.6.0
               ↓
         public Norwegian APIs
 ```
@@ -200,12 +200,13 @@ loudly if a future change introduces an HTTP path.
 | Test            | Vitest 4 | Native ESM + TS, v8 coverage, no transform config.                                                                                                                          |
 | Package manager | pnpm 11  | Strict node_modules layout catches undeclared-dependency bugs before publish.                                                                                               |
 
-## Why the tool count is 10, not one per SDK method
+## Why the tool count is 12, not one per SDK method
 
-The SDK exposes 55+ public methods across 15 namespaces. A server with one tool
-per method is unusable: tool descriptions are routing instructions, and an AI
-model given dozens of overlapping options routes worse than one given 10
-distinct ones. Selection criteria, in priority order:
+The SDK exposes 55+ public methods across 15 namespaces — the `klass` namespace
+alone has 14. A server with one tool per method is unusable: tool descriptions
+are routing instructions, and an AI model given dozens of overlapping options
+routes worse than one given a dozen distinct ones. So SSB Klass is exposed as
+two curated tools, not fourteen. Selection criteria, in priority order:
 
 1. Answers a question a person actually asks about Norway.
 2. Distinct enough that a model can choose it without ambiguity.
@@ -213,10 +214,12 @@ distinct ones. Selection criteria, in priority order:
 4. Works without credentials where possible.
 5. Demonstrates cross-provider composition.
 
-Three tools are **compositions**, not method wrappers:
+Several tools are **compositions or routers**, not thin method wrappers:
 `get_norwegian_transport_departures` (autocomplete → departures),
-`get_current_norwegian_hazards` (three warning feeds → one filtered list), and
-`query_norwegian_statistics` (metadata or data through one schema).
+`get_current_norwegian_hazards` (three warning feeds → one filtered list),
+`query_norwegian_statistics` (metadata or data through one schema), and
+`search_norwegian_classification_codes` (exact `getCode` vs. `searchCodes`
+pattern behind one contract).
 
 See [tool-catalogue.md](tool-catalogue.md) for the full per-tool contract and
 [capability-matrix.md](capability-matrix.md) for every method that was

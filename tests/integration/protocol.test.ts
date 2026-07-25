@@ -102,6 +102,58 @@ describe("MCP client over a spawned subprocess", () => {
     expect(text).toContain("notARealField");
   });
 
+  it("advertises both SSB Klass tools with strict schemas", async () => {
+    const { tools } = await client.listTools();
+    const byName = new Map(tools.map((tool) => [tool.name, tool]));
+
+    for (const name of [
+      "resolve_norwegian_administrative_code",
+      "search_norwegian_classification_codes",
+    ]) {
+      const tool = byName.get(name);
+      expect(tool, name).toBeDefined();
+      expect(tool!.inputSchema.additionalProperties, name).toBe(false);
+      expect(tool!.outputSchema, name).toBeDefined();
+    }
+  });
+
+  it("rejects unknown properties on the Klass classification search", async () => {
+    const result = await client.callTool({
+      name: "search_norwegian_classification_codes",
+      arguments: { classificationId: 131, codePattern: "0301", notARealField: true },
+    });
+
+    expect(result.isError).toBe(true);
+    const text = (result.content as { type: string; text: string }[])[0]!.text;
+    expect(text).toContain("notARealField");
+  });
+
+  it("rejects a malformed administrative code before any request", async () => {
+    // A two-digit code is not a valid municipality code; this must be refused by
+    // the schema, not routed to the provider.
+    const result = await client.callTool({
+      name: "resolve_norwegian_administrative_code",
+      arguments: { kind: "municipality", code: "30", targetDate: "2024-01-01" },
+    });
+
+    expect(result.isError).toBe(true);
+  });
+
+  it("routes a valid administrative resolution to its handler and stays alive", async () => {
+    // SSB Klass is anonymous, so a well-formed request needs no configuration.
+    // CI may or may not have network: a success or a clean provider error are
+    // both acceptable. What must hold is a well-formed MCP result — never a
+    // protocol crash — and a session that keeps serving afterwards.
+    const result = await client.callTool({
+      name: "resolve_norwegian_administrative_code",
+      arguments: { kind: "municipality", code: "1142", targetDate: "2024-01-01" },
+    });
+
+    expect(result).toHaveProperty("content");
+    const { tools } = await client.listTools();
+    expect(tools).toHaveLength(EXPECTED_TOOL_COUNT);
+  });
+
   it("keeps serving requests after an error", async () => {
     await client.callTool({ name: "search_norwegian_companies", arguments: { limit: -1 } });
     const { tools } = await client.listTools();
@@ -273,7 +325,7 @@ describe("CLI modes exit before any transport starts", () => {
   it("--doctor reports readiness and exits zero", async () => {
     const result = await run(["--doctor"]);
     expect(result.code).toBe(0);
-    expect(result.stdout).toContain("Tools (10)");
+    expect(result.stdout).toContain("Tools (12)");
     expect(result.stdout).toContain("No network requests were made");
   });
 

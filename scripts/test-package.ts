@@ -16,7 +16,7 @@ import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
-const EXPECTED_TOOL_COUNT = 10;
+const EXPECTED_TOOL_COUNT = 12;
 
 /** Files that must never ship: tests, fixtures, secrets, coverage, sources. */
 const FORBIDDEN_PATTERNS: { label: string; test: (path: string) => boolean }[] = [

@@ -18,6 +18,9 @@ import type {
   Departure,
   ElectricityPrice,
   HazardWarning,
+  KlassCode,
+  KlassCodeResolution,
+  KlassSearchCodesResult,
   MunicipalityProfile,
   OpenDataResponse,
   OpenDataSource,
@@ -68,6 +71,15 @@ export const SOURCES: Record<string, OpenDataSource> = {
     documentation: "https://www.ssb.no/en/api/pxwebapiv2",
     license: "Creative Commons Attribution 4.0 International (CC BY 4.0)",
     attribution: "Attribute Statistics Norway when redistributing data.",
+  },
+  "ssb-klass": {
+    id: "ssb-klass",
+    name: "Statistics Norway (SSB) Klass",
+    homepage: "https://www.ssb.no/en/klass/",
+    documentation: "https://data.ssb.no/api/klass/v1/api-guide.html",
+    license: "Creative Commons Attribution 4.0 International (CC BY 4.0)",
+    attribution:
+      "Statistics Norway (SSB), Klass — CC BY 4.0. Link to ssb.no and the licence, and indicate changes.",
   },
   entur: {
     id: "entur",
@@ -152,6 +164,7 @@ export type FakeSdkOverrides = {
   electricity?: Partial<NorwayOpenDataLike["electricity"]>;
   transport?: Partial<NorwayOpenDataLike["transport"]>;
   statistics?: Partial<NorwayOpenDataLike["statistics"]>;
+  klass?: Partial<NorwayOpenDataLike["klass"]>;
 };
 
 /**
@@ -190,6 +203,13 @@ export function createFakeSdk(overrides: FakeSdkOverrides = {}): NorwayOpenDataL
       getTableMetadata: notImplemented("statistics.getTableMetadata"),
       query: notImplemented("statistics.query"),
       ...overrides.statistics,
+    },
+    klass: {
+      resolveMunicipalityCode: notImplemented("klass.resolveMunicipalityCode"),
+      resolveCountyCode: notImplemented("klass.resolveCountyCode"),
+      searchCodes: notImplemented("klass.searchCodes"),
+      getCode: notImplemented("klass.getCode"),
+      ...overrides.klass,
     },
   };
 }
@@ -394,4 +414,118 @@ export const sampleStatisticsResult: StatisticsResult = {
     { Region: "0301", Tid: "2025", value: 717710 },
     { Region: "5401", Tid: "2025", value: 78638 },
   ],
+};
+
+// ---------------------------------------------------------------------------
+// SSB Klass sample payloads
+// ---------------------------------------------------------------------------
+
+/** A municipal merge: several old codes fold into one successor. */
+export const sampleMunicipalityMergeResolution: KlassCodeResolution = {
+  kind: "municipality",
+  input: { code: "1142", sourceDate: "2019-01-01", targetDate: "2024-01-01" },
+  status: "merged",
+  sourceCode: { code: "1142", name: "Rennesøy", validFrom: "1965-01-01", validTo: "2020-01-01" },
+  matches: [{ code: "1103", name: "Stavanger", validFrom: "2020-01-01" }],
+  predecessors: [
+    { code: "1102", name: "Stavanger", validTo: "2020-01-01" },
+    { code: "1141", name: "Finnøy", validTo: "2020-01-01" },
+    { code: "1142", name: "Rennesøy", validTo: "2020-01-01" },
+  ],
+  successors: [{ code: "1103", name: "Stavanger", validFrom: "2020-01-01" }],
+  changes: [
+    {
+      oldCode: "1142",
+      oldName: "Rennesøy",
+      newCode: "1103",
+      newName: "Stavanger",
+      occurredAt: "2020-01-01",
+    },
+  ],
+  warnings: [],
+};
+
+/** A county split: one old code becomes several successors. Every branch kept. */
+export const sampleCountySplitResolution: KlassCodeResolution = {
+  kind: "county",
+  input: { code: "30", targetDate: "2024-01-01" },
+  status: "split",
+  sourceCode: { code: "30", name: "Viken", validFrom: "2020-01-01", validTo: "2024-01-01" },
+  matches: [
+    { code: "31", name: "Østfold", validFrom: "2024-01-01" },
+    { code: "32", name: "Akershus", validFrom: "2024-01-01" },
+    { code: "33", name: "Buskerud", validFrom: "2024-01-01" },
+  ],
+  predecessors: [{ code: "30", name: "Viken", validTo: "2024-01-01" }],
+  successors: [
+    { code: "31", name: "Østfold", validFrom: "2024-01-01" },
+    { code: "32", name: "Akershus", validFrom: "2024-01-01" },
+    { code: "33", name: "Buskerud", validFrom: "2024-01-01" },
+  ],
+  changes: [
+    {
+      oldCode: "30",
+      oldName: "Viken",
+      newCode: "31",
+      newName: "Østfold",
+      occurredAt: "2024-01-01",
+    },
+    {
+      oldCode: "30",
+      oldName: "Viken",
+      newCode: "32",
+      newName: "Akershus",
+      occurredAt: "2024-01-01",
+    },
+    {
+      oldCode: "30",
+      oldName: "Viken",
+      newCode: "33",
+      newName: "Buskerud",
+      occurredAt: "2024-01-01",
+    },
+  ],
+  warnings: ["Viken was dissolved on 2024-01-01 into three counties."],
+};
+
+/** An unchanged current code. */
+export const sampleUnchangedResolution: KlassCodeResolution = {
+  kind: "municipality",
+  input: { code: "0301", targetDate: "2024-01-01" },
+  status: "unchanged",
+  sourceCode: { code: "0301", name: "Oslo", validFrom: "2020-01-01" },
+  matches: [{ code: "0301", name: "Oslo", validFrom: "2020-01-01" }],
+  predecessors: [],
+  successors: [],
+  changes: [],
+  warnings: [],
+};
+
+/** A code-pattern search result (STYRK occupation codes beginning 25). */
+export const sampleClassificationCodes: KlassSearchCodesResult = {
+  items: [
+    {
+      code: "2511",
+      name: "Systemutviklere",
+      level: "3",
+      parentCode: "251",
+      validFrom: "2011-01-01",
+    },
+    {
+      code: "2512",
+      name: "Programvareutviklere",
+      level: "3",
+      parentCode: "251",
+      validFrom: "2011-01-01",
+    },
+  ],
+  pagination: { page: 0, pageSize: 10, totalItems: 2, totalPages: 1, upstreamPaged: false },
+};
+
+/** A single exact code, as returned by `getCode`. */
+export const sampleKlassCode: KlassCode = {
+  code: "0301",
+  name: "Oslo",
+  level: "1",
+  validFrom: "2020-01-01",
 };

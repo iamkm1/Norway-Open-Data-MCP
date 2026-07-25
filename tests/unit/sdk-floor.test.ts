@@ -1,12 +1,14 @@
 /**
  * Release guard for the `norway-open-data-sdk` version floor.
  *
- * norway-open-data-sdk@0.5.3 corrects a population-aggregation bug in which
- * incomplete SSB population cells could be summed and reported as a complete
- * municipality total. `get_norwegian_municipality_profile` must never resolve
- * against an SDK below that fix.
+ * The floor rises with the capabilities this package depends on:
+ * - 0.5.3 corrected a population-aggregation bug behind
+ *   `get_norwegian_municipality_profile`.
+ * - 0.6.0 added the `sdk.klass` namespace, which the two SSB Klass tools
+ *   (`resolve_norwegian_administrative_code`,
+ *   `search_norwegian_classification_codes`) call directly.
  *
- * The SDK is pre-1.0, so its breaking (and correctness) changes ship as minor
+ * The SDK is pre-1.0, so its breaking (and feature) changes ship as minor
  * versions and a caret range does not float across them automatically — the
  * floor is only what this manifest declares. This test fails the build if
  * either the manifest range or the resolved lockfile version would allow an SDK
@@ -19,7 +21,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
-const REQUIRED_MINIMUM = "0.5.3";
+const REQUIRED_MINIMUM = "0.6.0";
 const SDK = "norway-open-data-sdk";
 
 const repoFile = (relative: string): string =>

@@ -2,7 +2,7 @@
  * Tool contracts and the injectable SDK surface.
  *
  * `NorwayOpenDataLike` is a structural subset of the real `NorwayOpenData`
- * facade containing only the namespaces and methods these ten tools actually
+ * facade containing only the namespaces and methods the curated tools actually
  * call. A real `NorwayOpenData` satisfies it, and a test fake can implement it
  * in a few lines — which is what keeps the unit suite off the public APIs.
  */
@@ -25,6 +25,12 @@ import type {
   ForecastParameters,
   HazardWarning,
   HazardWarningParameters,
+  KlassCode,
+  KlassCodeResolution,
+  KlassGetCodeParameters,
+  KlassResolveAdministrativeCodeParameters,
+  KlassSearchCodesParameters,
+  KlassSearchCodesResult,
   MunicipalityProfile,
   OpenDataResponse,
   RequestOptions,
@@ -112,6 +118,24 @@ export type NorwayOpenDataLike = {
       query: StatisticsQuery,
       options?: RequestOptions,
     ): Promise<OpenDataResponse<StatisticsResult>>;
+  };
+  klass: {
+    resolveMunicipalityCode(
+      parameters: KlassResolveAdministrativeCodeParameters,
+      options?: RequestOptions,
+    ): Promise<OpenDataResponse<KlassCodeResolution>>;
+    resolveCountyCode(
+      parameters: KlassResolveAdministrativeCodeParameters,
+      options?: RequestOptions,
+    ): Promise<OpenDataResponse<KlassCodeResolution>>;
+    searchCodes(
+      parameters: KlassSearchCodesParameters,
+      options?: RequestOptions,
+    ): Promise<OpenDataResponse<KlassSearchCodesResult>>;
+    getCode(
+      parameters: KlassGetCodeParameters,
+      options?: RequestOptions,
+    ): Promise<OpenDataResponse<KlassCode>>;
   };
 };
 

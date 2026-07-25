@@ -101,6 +101,43 @@ describeLive("live providers (opt-in, low volume)", () => {
     expect(envelope.warnings.join(" ")).toContain("never an all-clear");
   });
 
+  it("SSB Klass returns a well-formed, bounded classification-code search", async () => {
+    // Anonymous, credential-free: municipality 0301 (Oslo) in classification 131.
+    const result = await call("search_norwegian_classification_codes", {
+      classificationId: 131,
+      codePattern: "0301",
+      date: "2024-01-01",
+      limit: 5,
+    });
+
+    expect(result.isError).toBeFalsy();
+    const envelope = result.structuredContent as {
+      data: { codes: { code: string; name: string }[]; returnedCount: number };
+      sources: { id: string }[];
+    };
+    expect(Array.isArray(envelope.data.codes)).toBe(true);
+    expect(envelope.data.returnedCount).toBeLessThanOrEqual(5);
+    expect(envelope.sources[0]?.id).toBe("ssb-klass");
+  });
+
+  it("SSB Klass resolves a historical municipality code with an explicit status", async () => {
+    // 1142 (Rennesøy) was merged into 1103 (Stavanger) in 2020.
+    const result = await call("resolve_norwegian_administrative_code", {
+      kind: "municipality",
+      code: "1142",
+      targetDate: "2024-01-01",
+    });
+
+    expect(result.isError).toBeFalsy();
+    const envelope = result.structuredContent as {
+      data: { status: string; matches: unknown[] };
+      sources: { id: string }[];
+    };
+    expect(typeof envelope.data.status).toBe("string");
+    expect(Array.isArray(envelope.data.matches)).toBe(true);
+    expect(envelope.sources[0]?.id).toBe("ssb-klass");
+  });
+
   it("skips the weather tool cleanly when no contact email is configured", async () => {
     const result = await call("get_norwegian_weather_forecast", {
       latitude: 59.9139,

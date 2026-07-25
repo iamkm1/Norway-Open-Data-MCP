@@ -109,6 +109,9 @@ describe("routing evaluation corpus", () => {
       ["get_norwegian_municipality_profile", "query_norwegian_statistics"],
       ["get_norwegian_electricity_prices", "query_norwegian_statistics"],
       ["get_norwegian_transport_departures", "search_norwegian_addresses"],
+      ["get_norwegian_municipality_profile", "resolve_norwegian_administrative_code"],
+      ["resolve_norwegian_administrative_code", "search_norwegian_classification_codes"],
+      ["query_norwegian_statistics", "search_norwegian_classification_codes"],
     ];
 
     for (const [a, b] of pairs) {

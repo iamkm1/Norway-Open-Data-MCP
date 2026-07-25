@@ -71,7 +71,7 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
-    "norway-open-data-sdk": "^0.5.3",
+    "norway-open-data-sdk": "^0.6.0",
     "zod": "^4.1.13"
   },
   "devDependencies": {

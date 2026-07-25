@@ -35,8 +35,79 @@ describe("tool registry", () => {
 
     expect(tools).toHaveLength(EXPECTED_TOOL_COUNT);
     expect(allTools).toHaveLength(EXPECTED_TOOL_COUNT);
-    expect(EXPECTED_TOOL_COUNT).toBeGreaterThanOrEqual(8);
-    expect(EXPECTED_TOOL_COUNT).toBeLessThanOrEqual(10);
+    expect(EXPECTED_TOOL_COUNT).toBe(12);
+  });
+
+  it("registers the two SSB Klass tools exactly once, without disturbing the existing set", async () => {
+    harness = await createHarness({ sdk: createFakeSdk() });
+    const { tools } = await harness.client.listTools();
+    const names = tools.map((tool) => tool.name);
+
+    // The two new tools are present exactly once each.
+    for (const klassTool of [
+      "resolve_norwegian_administrative_code",
+      "search_norwegian_classification_codes",
+    ]) {
+      expect(names.filter((name) => name === klassTool)).toHaveLength(1);
+    }
+
+    // Every previously shipped tool is still registered, unchanged in name.
+    for (const existing of [
+      "search_norwegian_companies",
+      "get_norwegian_company_profile",
+      "search_norwegian_addresses",
+      "get_norwegian_location_profile",
+      "get_norwegian_municipality_profile",
+      "get_norwegian_weather_forecast",
+      "get_current_norwegian_hazards",
+      "get_norwegian_electricity_prices",
+      "get_norwegian_transport_departures",
+      "query_norwegian_statistics",
+    ]) {
+      expect(names).toContain(existing);
+    }
+  });
+
+  it("exposes a klass namespace on the injectable SDK surface", () => {
+    const sdk = createFakeSdk();
+    expect(typeof sdk.klass.resolveMunicipalityCode).toBe("function");
+    expect(typeof sdk.klass.resolveCountyCode).toBe("function");
+    expect(typeof sdk.klass.searchCodes).toBe("function");
+    expect(typeof sdk.klass.getCode).toBe("function");
+  });
+
+  it("lists and calls the Klass tools with no configured credentials at all", async () => {
+    // SSB Klass is anonymous: an empty config must not gate these tools.
+    harness = await createHarness({
+      sdk: createFakeSdk({
+        klass: {
+          searchCodes: () =>
+            Promise.resolve(
+              respond(
+                {
+                  items: [{ code: "0301", name: "Oslo", level: "1" }],
+                  pagination: {
+                    page: 0,
+                    pageSize: 10,
+                    totalItems: 1,
+                    totalPages: 1,
+                    upstreamPaged: false,
+                  },
+                },
+                SOURCES["ssb-klass"]!,
+              ),
+            ),
+        },
+      }),
+      config: { contactEmail: undefined },
+    });
+
+    const envelope = await harness.callOk("search_norwegian_classification_codes", {
+      classificationId: 131,
+      codePattern: "03*",
+      date: "2024-01-01",
+    });
+    expect(envelope.data["codes"]).toHaveLength(1);
   });
 
   it("gives every tool a unique name, a title, a strict schema and an output schema", async () => {
@@ -214,8 +285,11 @@ describe("doctor", () => {
 
     const text = report.lines.join("\n");
     expect(report.exitCode).toBe(0);
-    expect(text).toContain("Tools (10)");
+    expect(text).toContain("Tools (12)");
     expect(text).toContain("get_norwegian_weather_forecast: needs NORWAY_MCP_CONTACT_EMAIL");
+    // SSB Klass tools need no configuration and are ready even with an empty env.
+    expect(text).toContain("resolve_norwegian_administrative_code: ready");
+    expect(text).toContain("search_norwegian_classification_codes: ready");
     expect(text).toContain("No network requests were made");
   });
 

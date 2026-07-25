@@ -35,6 +35,16 @@ const ARGUMENTS: Record<string, Record<string, unknown>> = {
   get_norwegian_electricity_prices: { area: "NO1" },
   get_norwegian_transport_departures: { stopPlaceId: "NSR:StopPlace:1" },
   query_norwegian_statistics: { tableId: "07459" },
+  resolve_norwegian_administrative_code: {
+    kind: "municipality",
+    code: "0301",
+    targetDate: "2024-01-01",
+  },
+  search_norwegian_classification_codes: {
+    classificationId: 131,
+    codePattern: "0301",
+    date: "2024-01-01",
+  },
 };
 
 /**
@@ -75,6 +85,12 @@ function createSignalRecordingSdk(seen: AbortSignal[]): NorwayOpenDataLike {
       departures: hang,
     },
     statistics: { getTableMetadata: hang, query: hang },
+    klass: {
+      resolveMunicipalityCode: hang,
+      resolveCountyCode: hang,
+      searchCodes: hang,
+      getCode: hang,
+    },
   });
 }
 

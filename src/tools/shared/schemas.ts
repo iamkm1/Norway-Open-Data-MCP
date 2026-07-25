@@ -165,6 +165,27 @@ export const tableIdSchema = z
 
 export const languageSchema = z.enum(["no", "en"]).default("no");
 
+/**
+ * SSB Klass speaks its own language codes, distinct from the `no`/`en` used by
+ * the PxWeb statistics API: `nb` (Bokmål), `nn` (Nynorsk) and `en`. `nb` is the
+ * SDK's own default and the most complete Klass language, so it is the default
+ * here too.
+ */
+export const klassLanguageSchema = z.enum(["nb", "nn", "en"]).default("nb");
+
+/**
+ * A Klass classification identifier — the stable numeric id of an official
+ * classification or codelist (e.g. 131 for municipalities, 6 for industry).
+ * A positive integer; blank, zero, negative, fractional and absurd values are
+ * refused before any request is made. It is not restricted to a fixed list,
+ * because Klass publishes well over a hundred classifications.
+ */
+export const classificationIdSchema = z
+  .number()
+  .int("Classification ID must be a whole number, for example 131 for municipalities.")
+  .min(1, "Classification ID must be a positive number.")
+  .max(999_999, "Classification ID is out of range.");
+
 /** Days between two `YYYY-MM-DD` values, inclusive of neither endpoint. */
 export function daysBetween(start: string, end: string): number {
   return Math.round(

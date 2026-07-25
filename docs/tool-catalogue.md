@@ -1,6 +1,6 @@
 # Tool catalogue
 
-Ten curated read-only tools. Tool names are stable, language-neutral
+Twelve curated read-only tools. Tool names are stable, language-neutral
 identifiers and are never translated.
 
 Conventions used below:
@@ -417,19 +417,125 @@ detail when a dimension code is not valid for the table (the SDK raises
 
 ---
 
+## 11. `resolve_norwegian_administrative_code`
+
+**Title:** Resolve a Norwegian municipality or county code across reforms
+**SDK:** `klass.resolveMunicipalityCode()` / `klass.resolveCountyCode()` · **Provider:** SSB Klass · **Config:** none
+
+**Description.** Resolve a Norwegian municipality (kommune) or county (fylke)
+_number_ across official SSB Klass boundary changes — renames, replacements,
+merges and splits — as of a target date. Returns the official status and **every**
+candidate, never a single auto-chosen one.
+
+**Use this when** a code may be historical or reorganised: "what replaced
+municipality 1142?", "is county code 12 still current?", "which of today's
+municipalities cover an old code, and was it a merge or a split?".
+
+**Do not use this when** the user wants a code's name from a code list
+(`search_norwegian_classification_codes`) or municipality statistics
+(`get_norwegian_municipality_profile`). This tool never combines statistics.
+
+**Input**
+
+| Field        | Type                       | Default | Limit                                              |
+| ------------ | -------------------------- | ------- | -------------------------------------------------- |
+| `kind`       | `municipality` \| `county` | —       | required                                           |
+| `code`       | string, required           | —       | 4 digits (municipality) or 2 digits (county)       |
+| `targetDate` | `YYYY-MM-DD`, required     | —       | real date; resolves the code "as of" this date     |
+| `sourceDate` | `YYYY-MM-DD`               | —       | real date; only when the code is ambiguous in time |
+| `language`   | `nb` \| `nn` \| `en`       | `nb`    | Klass language codes, not the `no`/`en` of PxWeb   |
+
+Code format is validated against `kind` before any request: a two-digit code
+with `kind: "municipality"` is rejected.
+
+**Output** `{ kind, input{code,sourceDate?,targetDate}, status, sourceCode?, matches[], matchCount, predecessors[], successors[], changes[] }`.
+`status` is one of `unchanged`, `renamed`, `replaced`, `merged`, `split`,
+`ambiguous`, `not_found`, `context_required`, preserved verbatim from the SDK.
+**Budget** matches / predecessors / successors / changes each capped at 50
+(backstops real data never reaches) · typical 1–4 KB.
+**Ambiguity.** A merge, split or ambiguous result keeps every branch and is
+accompanied by a standing warning that it needs human/application judgement and
+that administrative correspondence does not prove statistical comparability. The
+tool never selects one code from several.
+**Warnings** the SDK's own resolution warnings pass through unchanged; truncation
+if a collection is bounded.
+**Errors** provider failure, rate limit, timeout, cancellation, and
+`upstream_invalid_response` on a changed provider contract.
+
+**Positive example.** "What replaced municipality 1142?" →
+`{ kind: "municipality", code: "1142", targetDate: "2024-01-01" }`.
+**Routes elsewhere.** "What's Oslo's population?" →
+`get_norwegian_municipality_profile`.
+
+---
+
+## 12. `search_norwegian_classification_codes`
+
+**Title:** Search codes in an official SSB Klass classification
+**SDK:** `klass.searchCodes()`, or `klass.getCode()` for an exact code · **Provider:** SSB Klass · **Config:** none
+
+**Description.** Look up codes in an official SSB Klass classification by **code
+pattern** — an exact code, a `*` wildcard, a `-` range or a `,` list. This is
+code-pattern search (the provider's `selectCodes` syntax), **not** name or
+full-text search. Returns each code with its official name, hierarchy level and
+validity dates.
+
+**Use this when** the user wants codes from an official classification:
+"municipality code 0301 in the code list", "occupation codes starting with 25",
+"industry codes 01–05". Common classification IDs: 131 municipalities, 104
+counties, 6 industry (SN/NACE), 7 occupations (STYRK), 36 education.
+
+**Do not use this when** the user wants to know whether a municipality or county
+code changed over time (`resolve_norwegian_administrative_code`) or wants a
+statistics table (`query_norwegian_statistics`). You cannot search by place or
+category _name_ here.
+
+**Input**
+
+| Field              | Type                 | Default             | Limit                                        |
+| ------------------ | -------------------- | ------------------- | -------------------------------------------- |
+| `classificationId` | integer, required    | —                   | positive integer (a stable Klass id)         |
+| `codePattern`      | string, required     | —                   | 1–64 chars: digits, letters, `.` `,` `-` `*` |
+| `date`             | `YYYY-MM-DD`         | today (Europe/Oslo) | codes valid on this date                     |
+| `level`            | string               | —                   | 1–2 digit hierarchy level filter             |
+| `language`         | `nb` \| `nn` \| `en` | `nb`                | Klass language codes                         |
+| `limit`            | integer              | 10                  | 1–20                                         |
+
+An exact code with no `level` filter is looked up with the precise `getCode`
+endpoint; a wildcard, range, list or a `level` filter uses `searchCodes`. A
+not-found exact code returns a clean, attributed empty result, not an error.
+
+**Output** `{ classificationId, date, language, codePattern, level?, mode: "exact"|"pattern", codes[], returnedCount, matchedCount, upstreamPaged? }`.
+Each code is `{ code, name, level?, parentCode?, shortName?, validFrom?, validTo? }`.
+**Budget** 10 default / 20 max codes; output bounded independently of the upstream
+response size · typical 1–4 KB.
+**Warnings** truncation when `matchedCount` exceeds the returned page.
+**Errors** `not_found` for an unknown classification; provider failure, rate
+limit, timeout, cancellation.
+
+**Positive example.** "Which occupation codes start with 25?" →
+`{ classificationId: 7, codePattern: "25*" }`.
+**Routes elsewhere.** "What replaced municipality 1142?" →
+`resolve_norwegian_administrative_code`.
+
+---
+
 ## Routing-ambiguity register
 
 Pairs deliberately separated by wording, and the discriminator used:
 
-| Pair    | Discriminator                                                     |
-| ------- | ----------------------------------------------------------------- |
-| 1 vs 2  | Do you have a 9-digit organization number?                        |
-| 3 vs 4  | Choosing _which_ address vs. conditions _at_ an address           |
-| 4 vs 6  | Street address vs. bare coordinate; single current vs. multi-hour |
-| 6 vs 7  | Forecast (temperature/rain/wind) vs. official danger warning      |
-| 5 vs 10 | Ready-made municipality answer vs. custom table breakdown         |
-| 8 vs 10 | Hourly spot price vs. energy statistics                           |
-| 9 vs 3  | Transit stop vs. street address                                   |
+| Pair     | Discriminator                                                     |
+| -------- | ----------------------------------------------------------------- |
+| 1 vs 2   | Do you have a 9-digit organization number?                        |
+| 3 vs 4   | Choosing _which_ address vs. conditions _at_ an address           |
+| 4 vs 6   | Street address vs. bare coordinate; single current vs. multi-hour |
+| 6 vs 7   | Forecast (temperature/rain/wind) vs. official danger warning      |
+| 5 vs 10  | Ready-made municipality answer vs. custom table breakdown         |
+| 8 vs 10  | Hourly spot price vs. energy statistics                           |
+| 9 vs 3   | Transit stop vs. street address                                   |
+| 5 vs 11  | Municipality statistics vs. did this code change over time        |
+| 11 vs 12 | Did a code change over time vs. look a code up in a list          |
+| 10 vs 12 | Statistics numbers vs. official classification code list          |
 
 These are exercised directly by the evaluation corpus in
 `tests/eval/tool-routing.json`.

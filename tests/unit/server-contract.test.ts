@@ -180,7 +180,7 @@ describe("version consistency", () => {
     );
     expect(manifest.name).toBe(PACKAGE_NAME);
     expect(manifest.version).toBe(PACKAGE_VERSION);
-    expect(manifest.bin[PACKAGE_NAME]).toBe("./dist/cli.js");
+    expect(manifest.bin[PACKAGE_NAME]).toBe("dist/cli.js");
   });
 });
 

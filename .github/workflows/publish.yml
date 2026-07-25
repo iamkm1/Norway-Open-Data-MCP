@@ -1,0 +1,62 @@
+name: Publish
+
+# Publishes norway-open-data-mcp to npm, and only ever for a pushed version tag.
+#
+# Authentication is GitHub OIDC trusted publishing: on a GitHub-hosted runner
+# with `id-token: write` and a recent npm CLI, `npm publish` exchanges a
+# short-lived OIDC token with the registry automatically. There is no
+# NODE_AUTH_TOKEN, no NPM_TOKEN, no repository secret and no long-lived
+# credential anywhere in this workflow. For a public repository and a public
+# package, npm generates a provenance attestation automatically.
+on:
+  push:
+    tags:
+      - "v*"
+
+# Least privilege: read the tagged tree, and mint the OIDC token used to
+# authenticate the publish. Nothing else.
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    name: Publish to npm (OIDC, provenance)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the tagged commit
+        uses: actions/checkout@v5
+
+      - name: Set up Node.js 24
+        uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          # No dependency cache in the publishing job, on purpose: a cache is
+          # attacker-influenceable state that must not sit in the publish path.
+
+      - name: Enable Corepack (provisions pnpm from packageManager)
+        run: corepack enable pnpm
+
+      - name: Ensure npm CLI supports OIDC trusted publishing (>= 11.5.1)
+        run: |
+          npm install --global npm@latest
+          npm --version
+
+      - name: Install dependencies (frozen lockfile)
+        run: pnpm install --frozen-lockfile
+
+      - name: Full verification pipeline
+        run: pnpm verify
+
+      - name: Verify the tag matches package.json version
+        run: |
+          tag_version="${GITHUB_REF_NAME#v}"
+          pkg_version="$(node -p "require('./package.json').version")"
+          echo "tag=${GITHUB_REF_NAME} tag_version=${tag_version} pkg_version=${pkg_version}"
+          if [ "${tag_version}" != "${pkg_version}" ]; then
+            echo "::error::Tag ${GITHUB_REF_NAME} does not match package.json version ${pkg_version}"
+            exit 1
+          fi
+
+      - name: Publish to npm (public, automatic provenance via OIDC)
+        run: npm publish --access public

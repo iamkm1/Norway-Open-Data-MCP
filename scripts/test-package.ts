@@ -97,7 +97,11 @@ function fail(message: string): never {
 async function main(): Promise<void> {
   log("→ Packing the tarball…");
   const packOutput = run("npm", ["pack", "--json"], ROOT);
-  const packed = JSON.parse(packOutput.slice(packOutput.indexOf("["))) as {
+  // Some npm versions print notices around the JSON array, so extract exactly
+  // from the first "[" to the last "]" rather than assuming nothing trails it.
+  const start = packOutput.indexOf("[");
+  const end = packOutput.lastIndexOf("]");
+  const packed = JSON.parse(packOutput.slice(start, end + 1)) as {
     filename: string;
     files: { path: string }[];
     size: number;

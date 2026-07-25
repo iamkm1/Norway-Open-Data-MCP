@@ -41,10 +41,19 @@ jobs:
       - name: Enable Corepack (provisions pnpm from packageManager)
         run: corepack enable pnpm
 
-      - name: Ensure npm CLI supports OIDC trusted publishing (>= 11.5.1)
+      - name: Confirm npm supports OIDC trusted publishing (>= 11.5.1)
+        # Node 24 already bundles npm >= 11.5.1 (11.16.x), which supports OIDC
+        # trusted publishing, so there is deliberately no global npm upgrade
+        # here: installing npm@latest changed `npm pack --json` output and broke
+        # the package smoke test during verify. Assert the floor instead of
+        # upgrading, and fail fast if a runner ever ships something older.
         run: |
-          npm install --global npm@latest
-          npm --version
+          npm_version="$(npm --version)"
+          echo "npm ${npm_version}"
+          if [ "$(printf '%s\n11.5.1\n' "${npm_version}" | sort -V | head -n1)" != "11.5.1" ]; then
+            echo "::error::npm ${npm_version} is below the 11.5.1 required for OIDC trusted publishing"
+            exit 1
+          fi
 
       - name: Install dependencies (frozen lockfile)
         run: pnpm install --frozen-lockfile

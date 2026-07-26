@@ -43,7 +43,7 @@ Record the date and the commit you tested.
 
 ### Tool listing
 
-- [ ] Exactly **10** tools are listed.
+- [ ] Exactly **28** tools are listed.
 - [ ] Every tool shows a human-readable **title** (e.g. "Search Norwegian
       companies"), not just the identifier.
 - [ ] Every description states both when to use the tool **and when not to**.
@@ -53,6 +53,13 @@ Record the date and the commit you tested.
   - [ ] `search_norwegian_addresses` vs `get_norwegian_location_profile`
   - [ ] `get_norwegian_weather_forecast` vs `get_current_norwegian_hazards`
   - [ ] `get_norwegian_municipality_profile` vs `query_norwegian_statistics`
+  - [ ] `get_protected_areas_at` vs `search_protected_areas`
+  - [ ] `get_nature_types_at` vs `get_land_resources_at`
+  - [ ] `get_nature_profile` vs the five single-dataset nature tools
+  - [ ] `search_geonorge_datasets` vs `get_geonorge_metadata`
+- [ ] **No tool's input form contains a URL, endpoint, host, service, layer or
+      type-name field.** That absence is the structural guarantee that this
+      server is not a map-service proxy.
 
 ### Input forms
 
@@ -62,6 +69,9 @@ Record the date and the commit you tested.
 - [ ] Defaults are visible (`limit` 10, `hours` 24, `language` "no").
 - [ ] Enum fields offer only valid values (`NO1`–`NO5`; `flood`, `avalanche`,
       `landslide`).
+- [ ] `includeGeometry` defaults to **false** on every geospatial tool.
+- [ ] `get_intervention_free_nature_at` and `get_nature_profile` show a minimum
+      `limit` of **2**, and their validation message explains why.
 
 ### Successful calls
 
@@ -87,6 +97,29 @@ not re-run rapidly, to stay well inside provider budgets.
       → address plus hazard section.
 - [ ] `get_norwegian_weather_forecast` with `{ "latitude": 59.91, "longitude": 10.75 }`
       → 24 hourly entries _(requires the contact email)_.
+- [ ] `search_geonorge_datasets` with `{ "query": "verneområder" }` → catalogue
+      records with identifiers, publishers and access flags.
+- [ ] `get_geonorge_metadata` with an identifier from that search → licence, CRS,
+      extent and advertised endpoints; **no contact e-mail address anywhere**.
+- [ ] `get_protected_areas_at` with `{ "latitude": 61.6365, "longitude": 8.3126 }`
+      → Jotunheimen nasjonalpark, with `geometry: null` and a `geometrySummary`
+      reporting its vertex count.
+- [ ] The same call with `"includeGeometry": true` → a GeoJSON polygon whose
+      `coordinates` length equals `1 + holeCount`.
+- [ ] `search_protected_areas` with
+      `{ "boundingBox": { "south": 61.5, "west": 8.2, "north": 61.7, "east": 8.5 } }`
+      → a bounded page whose `hasMore` equals `truncated`.
+- [ ] `get_nature_types_at` with `{ "latitude": 63.43, "longitude": 10.4 }` →
+      localities or a **clearly caveated empty result**.
+- [ ] `get_intervention_free_nature_at` with
+      `{ "latitude": 61.6365, "longitude": 8.3126 }` → a zone of `1`, `2` or `v`
+      with `statusDate` `2023-01`, credited with the layer's **own** attribution
+      wording (`Miljødirektoratet - inngrepsfri natur 01.2023`).
+- [ ] `get_land_resources_at` with `{ "latitude": 61.6365, "longitude": 8.3126 }`
+      → an AR50 class with `landType` labelled and the other codes raw.
+- [ ] `get_nature_profile` with `{ "latitude": 61.6365, "longitude": 8.3126 }` →
+      every section, `compositeSource` present in `data`, and `sources` listing
+      the real providers **without** the composite id.
 
 For each result:
 
@@ -98,6 +131,11 @@ For each result:
       first call and `true` on an immediate repeat.
 - [ ] Any truncation is reflected in both `truncation` and `warnings`.
 - [ ] Every hazard-bearing result carries the "never an all-clear" warning.
+- [ ] Every Naturbase-bearing result carries the "not evidence that no species,
+      habitat, environmental interest…" warning, and an empty one says "not an
+      environmental clearance" in the text tab too.
+- [ ] `sources` on the nature profile lists **two** Naturbase entries when the
+      intervention-free section answered, because its licence terms differ.
 
 ### Error paths
 
@@ -108,6 +146,15 @@ For each result:
       error; no provider request is made.
 - [ ] Call `get_norwegian_company_profile` with `{ "organizationNumber": "000000000" }`
       → a `not_found` error, distinguishable from an outage.
+- [ ] Call `search_protected_areas` with
+      `{ "boundingBox": { "south": 58, "west": 4, "north": 71, "east": 31 } }` →
+      refused, with a message saying the span cap is **this server's** limit and
+      not the provider's. It returns instantly: no request was made.
+- [ ] Call `get_geonorge_metadata` with
+      `{ "id": "https://kart.miljodirektoratet.no/geoserver/wfs" }` → refused as
+      not a catalogue identifier. This is the no-service-proxy guarantee.
+- [ ] Call `get_intervention_free_nature_at` with `"limit": 1` → refused with an
+      explanation, rather than an upstream `upstream_invalid_response`.
 - [ ] Call `get_current_norwegian_hazards` with `startDate` after `endDate` → a
       field-level validation error.
 - [ ] Errors are understandable prose, not a stack trace, and contain **no**

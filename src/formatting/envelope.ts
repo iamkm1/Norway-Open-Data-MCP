@@ -117,6 +117,28 @@ function toEnvelopeSource(source: OpenDataSource): EnvelopeSource {
 }
 
 /**
+ * Identity for de-duplication.
+ *
+ * Deliberately not the provider id alone. One provider can publish two sets of
+ * terms: `norway-open-data-sdk@0.8.0` returns the Naturbase intervention-free
+ * layer under the same `naturbase` id as the other Naturbase layers but with
+ * its own licence text and its own required attribution wording
+ * ("Miljødirektoratet - inngrepsfri natur 01.2023"). Keying on the id would
+ * keep whichever arrived first and silently drop the other's terms, which is
+ * exactly the attribution loss this envelope exists to prevent.
+ *
+ * For every source whose id maps to one set of terms — which is all of them
+ * outside Naturbase — this behaves identically to keying on the id.
+ *
+ * The three parts are JSON-encoded rather than joined with a separator, so no
+ * choice of separator can collide: an id of `a b` with licence `c` and an id of
+ * `a` with licence `b c` must never produce the same key.
+ */
+export function provenanceKey(source: OpenDataSource): string {
+  return JSON.stringify([source.id, source.license ?? "", source.attribution ?? ""]);
+}
+
+/**
  * Collects provenance across one or more SDK responses.
  *
  * `retrievedAt` takes the newest value; `cached` is true only when *every*
@@ -128,20 +150,21 @@ export function mergeProvenance(responses: readonly OpenDataResponse<unknown>[])
   retrievedAt: string;
   cached: boolean;
 } {
-  const byId = new Map<string, EnvelopeSource>();
+  const byKey = new Map<string, EnvelopeSource>();
   let retrievedAt = "";
   let cached = responses.length > 0;
 
   for (const response of responses) {
-    if (!byId.has(response.source.id)) {
-      byId.set(response.source.id, toEnvelopeSource(response.source));
+    const key = provenanceKey(response.source);
+    if (!byKey.has(key)) {
+      byKey.set(key, toEnvelopeSource(response.source));
     }
     if (response.retrievedAt > retrievedAt) retrievedAt = response.retrievedAt;
     if (!response.cached) cached = false;
   }
 
   return {
-    sources: [...byId.values()],
+    sources: [...byKey.values()],
     retrievedAt: retrievedAt || new Date().toISOString(),
     cached,
   };

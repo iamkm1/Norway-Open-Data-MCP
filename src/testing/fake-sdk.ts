@@ -23,13 +23,24 @@ import type {
   ElectricityPrice,
   FisheriesVesselSearchResult,
   FishingVessel,
+  GeonorgeDatasetSummary,
+  GeonorgeMetadata,
+  GeonorgeSearchResult,
   HazardWarning,
+  InterventionFreeAreaFeature,
   KlassCode,
   KlassCodeResolution,
   KlassSearchCodesResult,
+  LandResourceFeature,
+  LandResourceResult,
   MunicipalityProfile,
+  NaturbaseFeatureResult,
+  NatureAtLocationProfile,
+  NatureTypeFeature,
   OpenDataResponse,
   OpenDataSource,
+  ProposedProtectedAreaFeature,
+  ProtectedAreaFeature,
   SeaCurrentForecast,
   StatisticsResult,
   StatisticsTableMetadata,
@@ -139,6 +150,48 @@ export const SOURCES: Record<string, OpenDataSource> = {
     license: "Fiskeridirektoratet data licence, published under NLOD terms",
     attribution: "Credit the Norwegian Directorate of Fisheries (Fiskeridirektoratet).",
   },
+  geonorge: {
+    id: "geonorge",
+    name: "Geonorge / Kartverket",
+    homepage: "https://www.geonorge.no/",
+    documentation: "https://kartkatalog.geonorge.no/swagger/index.html",
+    license:
+      "CC BY 4.0 for Kartverket open products; catalogued resources have publisher-specific licences and access constraints.",
+    attribution:
+      "Credit © Kartverket for the Geonorge catalogue; also follow each resource publisher's licence and attribution metadata.",
+  },
+  naturbase: {
+    id: "naturbase",
+    name: "Norwegian Environment Agency (Miljødirektoratet) / Naturbase",
+    homepage: "https://www.miljodirektoratet.no/",
+    documentation: "https://kartkatalog.miljodirektoratet.no/",
+    license: "Norwegian Licence for Open Government Data (NLOD)",
+    attribution:
+      "Contains data made available by Miljødirektoratet under the Norwegian Licence for Open Government Data (NLOD).",
+  },
+  /**
+   * The intervention-free layer, which the SDK returns under the **same
+   * `naturbase` id** but with its own licence version and its own required
+   * wording. Copied verbatim from `norway-open-data-sdk@0.8.0`, because a
+   * fixture that collapsed it into the general Naturbase source would let an
+   * attribution regression pass unnoticed.
+   */
+  "naturbase-intervention-free": {
+    id: "naturbase",
+    name: "Norwegian Environment Agency (Miljødirektoratet) / Naturbase",
+    homepage: "https://www.miljodirektoratet.no/",
+    documentation: "https://kartkatalog.miljodirektoratet.no/",
+    license: "Norwegian Licence for Open Government Data (NLOD) 1.0",
+    attribution: "Miljødirektoratet - inngrepsfri natur 01.2023",
+  },
+  nibio: {
+    id: "nibio",
+    name: "Norwegian Institute of Bioeconomy Research (NIBIO)",
+    homepage: "https://www.nibio.no/",
+    documentation: "https://www.nibio.no/tjenester/wfs-tjenester/wfs-tjeneste-ar50",
+    license: "Norwegian Licence for Open Government Data (NLOD) 1.0",
+    attribution: "Kilde: NIBIO.",
+  },
 };
 
 /**
@@ -162,6 +215,12 @@ export const COMPOSITE_PROFILE_SOURCES: Record<string, OpenDataSource> = {
     name: "Brønnøysundregistrene and Kartverket",
     homepage: "https://github.com/iamkm1/Norway-Open-Data",
     documentation: "https://github.com/iamkm1/Norway-Open-Data#cross-provider-company-profile",
+  },
+  nature: {
+    id: "naturbase+nibio+kartverket",
+    name: "Miljødirektoratet / Naturbase, NIBIO and Kartverket",
+    homepage: "https://github.com/iamkm1/Norway-Open-Data",
+    documentation: "https://github.com/iamkm1/Norway-Open-Data#cross-provider-nature-profile",
   },
 };
 
@@ -239,6 +298,9 @@ export type FakeSdkOverrides = {
   ais?: Partial<NorwayOpenDataLike["ais"]>;
   marine?: Partial<NorwayOpenDataLike["marine"]>;
   fisheries?: Partial<NorwayOpenDataLike["fisheries"]>;
+  geodata?: Partial<NorwayOpenDataLike["geodata"]>;
+  environment?: Partial<NorwayOpenDataLike["environment"]>;
+  land?: Partial<NorwayOpenDataLike["land"]>;
 };
 
 /**
@@ -254,6 +316,7 @@ export function createFakeSdk(overrides: FakeSdkOverrides = {}): NorwayOpenDataL
       address: notImplemented("profiles.address"),
       municipality: notImplemented("profiles.municipality"),
       vessel: notImplemented("profiles.vessel"),
+      natureAtLocation: notImplemented("profiles.natureAtLocation"),
       ...overrides.profiles,
     },
     addresses: { search: notImplemented("addresses.search"), ...overrides.addresses },
@@ -303,6 +366,23 @@ export function createFakeSdk(overrides: FakeSdkOverrides = {}): NorwayOpenDataL
       searchAquacultureSites: notImplemented("fisheries.searchAquacultureSites"),
       getAquacultureSite: notImplemented("fisheries.getAquacultureSite"),
       ...overrides.fisheries,
+    },
+    geodata: {
+      searchDatasets: notImplemented("geodata.searchDatasets"),
+      getMetadata: notImplemented("geodata.getMetadata"),
+      ...overrides.geodata,
+    },
+    environment: {
+      getProtectedAreasAt: notImplemented("environment.getProtectedAreasAt"),
+      searchProtectedAreas: notImplemented("environment.searchProtectedAreas"),
+      getProposedProtectedAreasAt: notImplemented("environment.getProposedProtectedAreasAt"),
+      getNatureTypesAt: notImplemented("environment.getNatureTypesAt"),
+      getInterventionFreeAreasAt: notImplemented("environment.getInterventionFreeAreasAt"),
+      ...overrides.environment,
+    },
+    land: {
+      getLandResourcesAt: notImplemented("land.getLandResourcesAt"),
+      ...overrides.land,
     },
   };
 }
@@ -856,6 +936,482 @@ export const sampleVesselProfile: VesselProfile = {
       source: SOURCES["fiskeridir-vessels"]!,
       retrievedAt: "2026-07-23T12:00:00.000Z",
       cached: false,
+    },
+  ],
+};
+
+// ---------------------------------------------------------------------------
+// Geospatial sample payloads
+// ---------------------------------------------------------------------------
+
+/**
+ * A polygon **with a hole**.
+ *
+ * The second ring is an interior ring. Tests assert it survives, because
+ * dropping it would silently enlarge a protected area by the part that is
+ * explicitly excluded from it.
+ */
+export const samplePolygonWithHole = {
+  type: "Polygon" as const,
+  coordinates: [
+    [
+      [8.0, 61.0],
+      [8.2, 61.0],
+      [8.2, 61.2],
+      [8.0, 61.2],
+      [8.0, 61.0],
+    ],
+    [
+      [8.08, 61.08],
+      [8.12, 61.08],
+      [8.12, 61.12],
+      [8.08, 61.12],
+      [8.08, 61.08],
+    ],
+  ] as [number, number][][],
+};
+
+/** A two-part multipolygon; the second part also has a hole. */
+export const sampleMultiPolygon = {
+  type: "MultiPolygon" as const,
+  coordinates: [
+    [
+      [
+        [10.0, 63.0],
+        [10.1, 63.0],
+        [10.1, 63.1],
+        [10.0, 63.1],
+        [10.0, 63.0],
+      ],
+    ],
+    [
+      [
+        [10.5, 63.5],
+        [10.7, 63.5],
+        [10.7, 63.7],
+        [10.5, 63.7],
+        [10.5, 63.5],
+      ],
+      [
+        [10.55, 63.55],
+        [10.6, 63.55],
+        [10.6, 63.6],
+        [10.55, 63.6],
+        [10.55, 63.55],
+      ],
+    ],
+  ] as [number, number][][][],
+};
+
+/**
+ * A geometry far past the per-feature vertex ceiling.
+ *
+ * Not an invented extreme: the live AR50 polygon at Galdhøpiggen carries 19,403
+ * vertices across 63 rings, so a geometry this size is the ordinary case for
+ * generalized national land cover rather than an edge case.
+ */
+export const sampleHugeGeometry = {
+  type: "Polygon" as const,
+  coordinates: [
+    Array.from(
+      { length: 6_000 },
+      (_unused, index) => [8 + index / 1_000_000, 61 + index / 1_000_000] as [number, number],
+    ),
+  ],
+};
+
+export const sampleProtectedArea: ProtectedAreaFeature = {
+  type: "Feature",
+  id: "VV00001",
+  geometry: samplePolygonWithHole,
+  properties: {
+    id: "VV00001",
+    cddaId: "555512345",
+    name: "Jotunheimen",
+    officialName: "Jotunheimen nasjonalpark",
+    protectionForm: "Nasjonalpark",
+    aggregatedProtectionForm: "Nasjonalpark",
+    iucnCategory: "II",
+    municipality: "Lom, Vågå, Vang",
+    managementAuthority: "Jotunheimen nasjonalparkstyre",
+    managementAuthorityType: "Nasjonalparkstyre",
+    protectedAt: "1980-12-05",
+    firstProtectedAt: "1980-12-05",
+    protectionPlan: "Nasjonalparkplanen",
+    threatAssessment: "Ingen kjent trussel",
+    majorEcosystemType: "Fjell",
+    revisionStatus: "Ikke under revisjon",
+    factSheetUrl: "https://faktaark.naturbase.no/?id=VV00001",
+    regulationUrl: "https://lovdata.no/dokument/MV/forskrift/1980-12-05-1",
+  },
+};
+
+export const sampleProposedProtectedArea: ProposedProtectedAreaFeature = {
+  type: "Feature",
+  id: "FV00042",
+  geometry: sampleMultiPolygon,
+  properties: {
+    id: "FV00042",
+    name: "Storlia",
+    protectionForm: "Naturreservat",
+    protectionPlan: "Frivillig vern av skog",
+    municipality: "Heim",
+    objectType: "ForeslattVerneomrade",
+    capturedAt: "2024-05-12",
+    surveyMethod: "Digitalisert fra kart",
+    accuracyMeters: 25,
+    factSheetUrl: "https://faktaark.naturbase.no/?id=FV00042",
+  },
+};
+
+export const sampleNatureType: NatureTypeFeature = {
+  type: "Feature",
+  id: "NINF00123",
+  geometry: samplePolygonWithHole,
+  properties: {
+    id: "NINF00123",
+    areaName: "Storvika sørvest",
+    municipalities: "Heim",
+    natureType: "Åpen grunnlendt kalkmark",
+    natureTypeCode: "T2-C-1",
+    localityQuality: 3,
+    condition: 2,
+    conditionDescription: "God",
+    biodiversity: 3,
+    biodiversityDescription: "Svært viktig",
+    majorEcosystem: "Fastmarkssystemer",
+    mosaic: false,
+    accuracy: 10,
+    uncertainty: 1,
+    uncertaintyDescription: "Liten usikkerhet",
+    surveyedAt: "2023-07-14",
+    surveyYear: 2023,
+    redListed: true,
+    nearThreatened: false,
+    centralEcosystemFunction: true,
+    poorlyMapped: false,
+    factSheetUrl: "https://faktaark.naturbase.no/?id=NINF00123",
+  },
+};
+
+/** Carries the intervention-free layer's own licence and attribution. */
+export const sampleInterventionFreeArea: InterventionFreeAreaFeature = {
+  type: "Feature",
+  id: "INON-9001",
+  geometry: samplePolygonWithHole,
+  properties: {
+    id: "INON-9001",
+    zone: "v",
+    zoneDescription: "At least 5 km from major infrastructure (wilderness-like nature)",
+    areaSquareKilometers: 412.6,
+    statusDate: "2023-01",
+  },
+};
+
+/** A feature the provider published without geometry at all. */
+export const sampleNullGeometryLandResource: LandResourceFeature = {
+  type: "Feature",
+  id: "AR50-null",
+  geometry: null,
+  properties: { id: "AR50-null", objectType: "ArealressursFlate", landTypeCode: "99" },
+};
+
+export const sampleLandResource: LandResourceFeature = {
+  type: "Feature",
+  id: "AR50-1",
+  geometry: sampleMultiPolygon,
+  properties: {
+    id: "AR50-1",
+    objectType: "ArealressursFlate",
+    landTypeCode: "30",
+    forestProductivityCode: "12",
+    treeTypeCode: "31",
+    agricultureCode: "99",
+    vegetationCoverCode: "51",
+    updatedAt: "2023-11-01",
+  },
+};
+
+const WGS84_CRS = {
+  identifier: "OGC:CRS84" as const,
+  uri: "http://www.opengis.net/def/crs/OGC/1.3/CRS84" as const,
+  axisOrder: "longitude-latitude" as const,
+  declared: false,
+};
+
+const NATURBASE_SOURCE_CRS = {
+  identifier: "EPSG:25833" as const,
+  uri: "http://www.opengis.net/def/crs/EPSG/0/25833" as const,
+  axisOrder: "easting-northing" as const,
+};
+
+const NIBIO_SOURCE_CRS = {
+  identifier: "EPSG:4258" as const,
+  uri: "http://www.opengis.net/def/crs/EPSG/0/4258" as const,
+  axisOrder: "latitude-longitude" as const,
+};
+
+/** Builds a Naturbase feature result with the SDK's exact envelope shape. */
+export function naturbaseResult<Feature>(
+  features: Feature[],
+  pagination: Partial<NaturbaseFeatureResult<Feature>["pagination"]> = {},
+): NaturbaseFeatureResult<Feature> {
+  return {
+    type: "FeatureCollection",
+    features,
+    crs: WGS84_CRS,
+    sourceCrs: NATURBASE_SOURCE_CRS,
+    pagination: {
+      limit: 100,
+      pageSize: 100,
+      pagesFetched: 1,
+      returned: features.length,
+      truncated: false,
+      ...pagination,
+    },
+  };
+}
+
+/** Builds an AR50 feature result with the SDK's exact envelope shape. */
+export function landResourceResult(
+  features: LandResourceFeature[],
+  pagination: Partial<LandResourceResult["pagination"]> = {},
+): LandResourceResult {
+  return {
+    type: "FeatureCollection",
+    features,
+    crs: { ...WGS84_CRS, identifier: "EPSG:4326", declared: true, original: "EPSG:4326" },
+    sourceCrs: NIBIO_SOURCE_CRS,
+    pagination: {
+      limit: 100,
+      pageSize: 100,
+      pagesFetched: 1,
+      returned: features.length,
+      truncated: false,
+      ...pagination,
+    },
+  };
+}
+
+export const sampleGeonorgeDataset: GeonorgeDatasetSummary = {
+  type: "dataset",
+  id: "dd9d5e94-5b3d-4e46-9b3c-000000000001",
+  title: "Naturvernområder",
+  description: "Vernede områder etter naturmangfoldloven.",
+  publisher: "Miljødirektoratet",
+  themes: ["Miljø"],
+  access: { isOpenData: true, isRestricted: false, isProtected: false, label: "Åpne data" },
+  updatedAt: "2026-05-04T00:00:00Z",
+  spatialScope: "Nasjonal",
+};
+
+export const sampleGeonorgeDatasetSearch: GeonorgeSearchResult<GeonorgeDatasetSummary> = {
+  items: [sampleGeonorgeDataset],
+  pagination: {
+    offset: 0,
+    limit: 10,
+    returned: 1,
+    totalItems: 1,
+    hasMore: false,
+    truncated: false,
+  },
+};
+
+export const sampleGeonorgeMetadata: GeonorgeMetadata = {
+  id: "dd9d5e94-5b3d-4e46-9b3c-000000000001",
+  title: "Naturvernområder",
+  type: "dataset",
+  description: "Vernede områder etter naturmangfoldloven, forvaltet av Miljødirektoratet.",
+  publisher: "Miljødirektoratet",
+  themes: ["Miljø"],
+  keywords: ["vern", "naturvernområde", "nasjonalpark"],
+  spatialScope: "Nasjonal",
+  geographicExtent: { south: 57.75, west: 4.09, north: 71.38, east: 31.29 },
+  referenceSystems: [{ name: "EUREF89 UTM sone 33", url: "https://epsg.io/25833" }],
+  contacts: [
+    {
+      name: "Kari Nordmann",
+      organization: "Miljødirektoratet",
+      email: "kari.nordmann@example.no",
+      role: "pointOfContact",
+    },
+  ],
+  license: {
+    name: "Norsk lisens for offentlige data (NLOD)",
+    url: "https://data.norge.no/nlod/no",
+  },
+  attribution: "Kilde: Miljødirektoratet",
+  useLimitations: "Kartlaget er ikke juridisk bindende.",
+  access: { isOpenData: true, isRestricted: false, isProtected: false, label: "Åpne data" },
+  updates: {
+    publishedAt: "2019-01-01",
+    updatedAt: "2026-05-04",
+    maintenanceFrequency: "daily",
+    status: "onGoing",
+  },
+  distributions: [
+    {
+      kind: "wfs",
+      protocol: "OGC:WFS",
+      protocolName: "OGC Web Feature Service",
+      url: "https://kart.miljodirektoratet.no/geoserver/wfs",
+      name: "naturvern",
+      organization: "Miljødirektoratet",
+      formats: [{ name: "GML", version: "3.2" }],
+    },
+  ],
+  services: [
+    {
+      id: "aa000000-0000-0000-0000-000000000002",
+      title: "Naturvernområder WMS",
+      kind: "wms",
+      protocol: "OGC:WMS",
+      url: "https://kart.miljodirektoratet.no/geoserver/wms",
+    },
+  ],
+  operatesOn: [],
+};
+
+/** A complete nature profile: every dataset answered, place resolved. */
+export const sampleNatureProfile: NatureAtLocationProfile = {
+  location: { latitude: 61.1, longitude: 8.1 },
+  municipality: { code: "3434", name: "Lom", countyCode: "34", countyName: "Innlandet" },
+  nearestPlace: {
+    name: "Galdhøpiggen",
+    type: "fjell",
+    municipalityCode: "3434",
+    municipalityName: "Lom",
+    countyCode: "34",
+    countyName: "Innlandet",
+  },
+  protectedAreas: [sampleProtectedArea],
+  proposedProtectedAreas: [sampleProposedProtectedArea],
+  natureTypes: [sampleNatureType],
+  interventionFreeAreas: [sampleInterventionFreeArea],
+  landResources: [sampleLandResource],
+  pagination: {
+    protectedAreas: {
+      limit: 10,
+      pageSize: 10,
+      pagesFetched: 1,
+      returned: 1,
+      truncated: false,
+    },
+    landResources: {
+      limit: 10,
+      pageSize: 10,
+      pagesFetched: 1,
+      returned: 1,
+      truncated: true,
+      nextOffset: 1,
+    },
+  },
+  warnings: ["The land resources result was truncated at 1 feature."],
+  components: [
+    {
+      operation: "environment.getProtectedAreasAt",
+      section: "protected-areas",
+      status: "available",
+      source: SOURCES["naturbase"]!,
+      retrievedAt: "2026-07-23T12:00:00.000Z",
+      cached: false,
+    },
+    {
+      operation: "environment.getProposedProtectedAreasAt",
+      section: "proposed-protected-areas",
+      status: "available",
+      source: SOURCES["naturbase"]!,
+      retrievedAt: "2026-07-23T12:00:00.000Z",
+      cached: false,
+    },
+    {
+      operation: "environment.getNatureTypesAt",
+      section: "nature-types",
+      status: "available",
+      source: SOURCES["naturbase"]!,
+      retrievedAt: "2026-07-23T12:00:00.000Z",
+      cached: false,
+    },
+    {
+      operation: "environment.getInterventionFreeAreasAt",
+      section: "intervention-free-areas",
+      status: "available",
+      source: SOURCES["naturbase-intervention-free"]!,
+      retrievedAt: "2026-07-23T12:00:00.000Z",
+      cached: false,
+    },
+    {
+      operation: "land.getLandResourcesAt",
+      section: "land-resources",
+      status: "available",
+      source: SOURCES["nibio"]!,
+      retrievedAt: "2026-07-23T12:00:00.000Z",
+      cached: false,
+    },
+    {
+      operation: "places.nearby",
+      section: "place",
+      status: "available",
+      source: SOURCES["kartverket"]!,
+      retrievedAt: "2026-07-23T12:00:00.000Z",
+      cached: false,
+    },
+  ],
+};
+
+/**
+ * A degraded nature profile: Naturbase failed for two datasets, NIBIO answered,
+ * the place lookup found nothing. Proves one provider failure cannot destroy
+ * the components that did succeed.
+ */
+export const samplePartialNatureProfile: NatureAtLocationProfile = {
+  location: { latitude: 61.1, longitude: 8.1 },
+  natureTypes: [sampleNatureType],
+  landResources: [sampleLandResource],
+  pagination: {
+    natureTypes: { limit: 10, pageSize: 10, pagesFetched: 1, returned: 1, truncated: false },
+    landResources: { limit: 10, pageSize: 10, pagesFetched: 1, returned: 1, truncated: false },
+  },
+  warnings: ["Protected-area lookup failed: Miljødirektoratet returned HTTP 503."],
+  components: [
+    {
+      operation: "environment.getProtectedAreasAt",
+      section: "protected-areas",
+      status: "omitted",
+      source: SOURCES["naturbase"]!,
+      reason: "provider-error",
+      error: { name: "ProviderError", message: "Miljødirektoratet returned HTTP 503." },
+    },
+    {
+      operation: "environment.getProposedProtectedAreasAt",
+      section: "proposed-protected-areas",
+      status: "omitted",
+      source: SOURCES["naturbase"]!,
+      reason: "provider-error",
+      error: { name: "ProviderError", message: "Miljødirektoratet returned HTTP 503." },
+    },
+    {
+      operation: "environment.getNatureTypesAt",
+      section: "nature-types",
+      status: "available",
+      source: SOURCES["naturbase"]!,
+      retrievedAt: "2026-07-23T12:00:00.000Z",
+      cached: false,
+    },
+    {
+      operation: "land.getLandResourcesAt",
+      section: "land-resources",
+      status: "available",
+      source: SOURCES["nibio"]!,
+      retrievedAt: "2026-07-23T12:00:00.000Z",
+      cached: false,
+    },
+    {
+      operation: "places.nearby",
+      section: "place",
+      status: "omitted",
+      source: SOURCES["kartverket"]!,
+      reason: "not-found",
     },
   ],
 };

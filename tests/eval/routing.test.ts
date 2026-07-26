@@ -118,6 +118,14 @@ describe("routing evaluation corpus", () => {
       ["search_aquaculture_locations", "get_aquaculture_location"],
       ["get_marine_forecast", "get_norwegian_weather_forecast"],
       ["get_live_vessel_positions", "get_vessel_profile"],
+      ["search_geonorge_datasets", "get_geonorge_metadata"],
+      ["get_protected_areas_at", "search_protected_areas"],
+      ["get_protected_areas_at", "get_nature_types_at"],
+      ["get_nature_types_at", "get_land_resources_at"],
+      ["get_intervention_free_nature_at", "get_protected_areas_at"],
+      ["get_nature_profile", "get_protected_areas_at"],
+      ["get_nature_profile", "get_land_resources_at"],
+      ["search_geonorge_datasets", "get_current_norwegian_hazards"],
     ];
 
     for (const [a, b] of pairs) {

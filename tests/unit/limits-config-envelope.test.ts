@@ -125,6 +125,24 @@ describe("envelope provenance", () => {
     expect(provenance.retrievedAt).toBe("2026-07-23T12:00:00.000Z");
   });
 
+  it("keeps two entries for one provider id when their terms differ", () => {
+    // `norway-open-data-sdk@0.8.0` returns the Naturbase intervention-free
+    // layer under the `naturbase` id but with its own licence version and its
+    // own required attribution wording. De-duplicating on the id alone would
+    // keep whichever arrived first and silently drop the other's terms.
+    const provenance = mergeProvenance([
+      respond({}, SOURCES["naturbase"]!),
+      respond({}, SOURCES["naturbase-intervention-free"]!),
+      respond({}, SOURCES["naturbase"]!),
+    ]);
+
+    expect(provenance.sources).toHaveLength(2);
+    expect(provenance.sources.map((source) => source.id)).toEqual(["naturbase", "naturbase"]);
+    expect(provenance.sources.map((source) => source.attribution)).toContain(
+      "Miljødirektoratet - inngrepsfri natur 01.2023",
+    );
+  });
+
   it("claims cached only when every contributing response was cached", () => {
     expect(
       mergeProvenance([

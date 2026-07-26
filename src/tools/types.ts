@@ -34,18 +34,33 @@ import type {
   FisheriesVesselSearchResult,
   FishingVessel,
   ForecastParameters,
+  GeonorgeDatasetSummary,
+  GeonorgeMetadata,
+  GeonorgeSearchParameters,
+  GeonorgeSearchResult,
   HazardWarning,
   HazardWarningParameters,
+  InterventionFreeAreaFeature,
   KlassCode,
   KlassCodeResolution,
   KlassGetCodeParameters,
   KlassResolveAdministrativeCodeParameters,
   KlassSearchCodesParameters,
   KlassSearchCodesResult,
+  LandResourcePointQuery,
+  LandResourceResult,
   MarineForecastParameters,
   Mmsi,
   MunicipalityProfile,
+  NatureAtLocationParameters,
+  NatureAtLocationProfile,
+  NaturbaseBoundingBoxQuery,
+  NaturbaseFeatureResult,
+  NaturbasePointQuery,
+  NatureTypeFeature,
   OpenDataResponse,
+  ProposedProtectedAreaFeature,
+  ProtectedAreaFeature,
   RequestOptions,
   SeaCurrentForecast,
   StatisticsQuery,
@@ -83,6 +98,10 @@ export type NorwayOpenDataLike = {
       parameters: VesselProfileParameters,
       options?: RequestOptions,
     ): Promise<OpenDataResponse<VesselProfile>>;
+    natureAtLocation(
+      parameters: NatureAtLocationParameters,
+      options?: RequestOptions,
+    ): Promise<OpenDataResponse<NatureAtLocationProfile>>;
   };
   addresses: {
     search(
@@ -201,6 +220,57 @@ export type NorwayOpenDataLike = {
       siteNumber: string,
       options?: RequestOptions,
     ): Promise<OpenDataResponse<AquacultureSite>>;
+  };
+  /**
+   * Geonorge's national metadata catalogue.
+   *
+   * Only the two read paths the curated tools use. `searchServices` and the
+   * `searchDatasetsAll` / `searchServicesAll` iterators exist on the real client
+   * and are deliberately absent here: an MCP tool call must be one bounded
+   * request, not a walk of the catalogue.
+   */
+  geodata: {
+    searchDatasets(
+      parameters?: GeonorgeSearchParameters,
+      options?: RequestOptions,
+    ): Promise<OpenDataResponse<GeonorgeSearchResult<GeonorgeDatasetSummary>>>;
+    getMetadata(id: string, options?: RequestOptions): Promise<OpenDataResponse<GeonorgeMetadata>>;
+  };
+  /**
+   * Selected Naturbase vector layers from Miljødirektoratet.
+   *
+   * The `iterate*` generators the real client also exposes are omitted for the
+   * same reason as above: they are unbounded by construction, and every tool
+   * here returns one bounded page.
+   */
+  environment: {
+    getProtectedAreasAt(
+      query: NaturbasePointQuery,
+      options?: RequestOptions,
+    ): Promise<OpenDataResponse<NaturbaseFeatureResult<ProtectedAreaFeature>>>;
+    searchProtectedAreas(
+      query: NaturbaseBoundingBoxQuery,
+      options?: RequestOptions,
+    ): Promise<OpenDataResponse<NaturbaseFeatureResult<ProtectedAreaFeature>>>;
+    getProposedProtectedAreasAt(
+      query: NaturbasePointQuery,
+      options?: RequestOptions,
+    ): Promise<OpenDataResponse<NaturbaseFeatureResult<ProposedProtectedAreaFeature>>>;
+    getNatureTypesAt(
+      query: NaturbasePointQuery,
+      options?: RequestOptions,
+    ): Promise<OpenDataResponse<NaturbaseFeatureResult<NatureTypeFeature>>>;
+    getInterventionFreeAreasAt(
+      query: NaturbasePointQuery,
+      options?: RequestOptions,
+    ): Promise<OpenDataResponse<NaturbaseFeatureResult<InterventionFreeAreaFeature>>>;
+  };
+  /** NIBIO's open, generalized AR50 land-resource classification. */
+  land: {
+    getLandResourcesAt(
+      query: LandResourcePointQuery,
+      options?: RequestOptions,
+    ): Promise<OpenDataResponse<LandResourceResult>>;
   };
 };
 

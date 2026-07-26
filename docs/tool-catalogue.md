@@ -1,6 +1,6 @@
 # Tool catalogue
 
-Twenty curated read-only tools. Tool names are stable, language-neutral
+Twenty-eight curated read-only tools. Tool names are stable, language-neutral
 identifiers and are never translated.
 
 Conventions used below:
@@ -844,6 +844,475 @@ requested section failed; rate limit, timeout, cancellation.
 
 ---
 
+## 21. `search_geonorge_datasets`
+
+**Title:** Search the Geonorge dataset catalogue
+**SDK:** `geodata.searchDatasets()` · **Provider:** Geonorge / Kartverket · **Config:** none
+
+**Description.** Search Norway's national catalogue of geospatial metadata for
+datasets by free text, publishing organization or theme. Returns each record's
+opaque identifier, title, abstract, publisher, themes, access flags and update
+date.
+
+**Use this when** the user asks what Norwegian map or geodata exists about a
+subject, or who publishes it.
+
+**Do not use this when** the user wants the data rather than a description of it.
+This returns catalogue metadata only; this server never downloads a catalogued
+resource and no tool accepts a service URL.
+
+**Input**
+
+| Field       | Type    | Default | Limit                    |
+| ----------- | ------- | ------- | ------------------------ |
+| `query`     | string  | —       | 2–200 chars, trimmed     |
+| `publisher` | string  | —       | 2–200 chars, exact facet |
+| `theme`     | string  | —       | 2–100 chars, exact facet |
+| `limit`     | integer | 10      | 1–50                     |
+| `offset`    | integer | 0       | 0–1000                   |
+
+At least one of `query`, `publisher`, `theme` is required: listing the whole
+national catalogue is not supported. Geonorge's own per-request ceiling is 100;
+50 is this server's.
+
+**Output** `{ datasets[], pagination{offset,limit,returned,totalItems,hasMore} }`
+**Budget** 10 default / 50 max · typical 2–15 KB
+**Warnings** catalogue-scope note (metadata, not data; endpoints never fetched;
+per-resource licences); a restricted/protected match; truncation.
+**Continuation** `{ hasMore, nextArguments: { …input, offset } }` when Geonorge
+reports more matches than this page returned.
+**Errors** provider failure, rate limit, timeout, cancellation.
+
+**Positive example.** "Which datasets describe avalanche hazard zones?" →
+`{ query: "skredfare" }`.
+**Routes elsewhere.** "What's the licence on record dd9d…?" →
+`get_geonorge_metadata`.
+
+---
+
+## 22. `get_geonorge_metadata`
+
+**Title:** Get one Geonorge catalogue record
+**SDK:** `geodata.getMetadata()` · **Provider:** Geonorge / Kartverket · **Config:** none
+
+**Description.** Retrieve the full catalogue record for one Geonorge identifier:
+abstract, keywords, geographic extent, coordinate reference systems, licence
+terms, use limitations, update regime, advertised distributions and related
+services.
+
+**Use this when** the user asks who owns a dataset, how current it is, under what
+licence it may be reused, or in which projection it is published.
+
+**Do not use this** to obtain the data itself, and never pass it a web address.
+
+**Input**
+
+| Field | Type             | Default | Limit                                    |
+| ----- | ---------------- | ------- | ---------------------------------------- |
+| `id`  | string, required | —       | 8–128 chars, `[A-Za-z0-9._:-]`, no `://` |
+
+The pattern accepts Geonorge's UUID-shaped identifiers and rejects anything that
+could be a location: no scheme, no slash, no whitespace, no control character,
+and never `.` or `..`. That is what keeps a curated catalogue tool from becoming
+an arbitrary-URL proxy.
+
+**Output** `{ id, title, type, description?, publisher?, themes[], keywords[],
+spatialScope?, geographicExtent|null, referenceSystems[], contacts[],
+license|null, attribution?, useLimitations?, access{}, updates{},
+distributions[], services[], operatesOn[], serviceType? }`
+**Budget** 30 keywords, 20 distributions, 20 services, 10 contacts, 10 reference
+systems; description clamped to 2,000 chars · typical 2–20 KB
+**Privacy** `contacts` carries the responsible **organization and role only**.
+Geonorge publishes named individuals with e-mail addresses; those are dropped.
+**Warnings** catalogue-scope note; "no declared licence is not permission" when
+`license` is null; a restricted/protected resource; "the listed endpoints are
+metadata and this server does not call them"; the contact-reduction note.
+**Errors** `not_found` for an unknown identifier; `upstream_invalid_response` if
+Geonorge answers for a different record; provider failure, rate limit, timeout,
+cancellation.
+
+**Positive example.** "Under what licence may I reuse this dataset?" →
+`{ id: "dd9d5e94-5b3d-4e46-9b3c-000000000001" }`.
+**Routes elsewhere.** "Which datasets exist about protected areas?" →
+`search_geonorge_datasets`.
+
+---
+
+## 23. `get_protected_areas_at`
+
+**Title:** Get protected areas at a coordinate
+**SDK:** `environment.getProtectedAreasAt()`, optionally
+`environment.getProposedProtectedAreasAt()` · **Provider:** Miljødirektoratet /
+Naturbase · **Config:** none
+
+**Description.** Report which Norwegian nature-conservation areas legally cover
+one WGS84 coordinate — protection form, IUCN category, managing authority,
+protection date, the Lovdata regulation and the Naturbase fact sheet —
+optionally including areas only _proposed_ for protection.
+
+**Use this when** the user asks whether a specific point or site lies inside a
+national park, nature reserve, landscape-protection area or similar.
+
+**Do not use this** to survey a region (`search_protected_areas` takes a bounding
+box), and never read an empty result as proof that nothing of environmental value
+is present.
+
+**Input**
+
+| Field             | Type             | Default | Limit               |
+| ----------------- | ---------------- | ------- | ------------------- |
+| `latitude`        | number, required | —       | −90 to 90, finite   |
+| `longitude`       | number, required | —       | −180 to 180, finite |
+| `includeProposed` | boolean          | `false` | —                   |
+| `includeGeometry` | boolean          | `false` | —                   |
+| `limit`           | integer          | 10      | 1–50                |
+
+**Output** `{ location, protectedAreas[], protectedAreaPagination,
+proposedProtectedAreas[]|null, proposedPagination|null }`
+**Budget** 10 default / 50 max per dataset; geometry bounded per feature and per
+result (see §Geometry) · typical 2–10 KB without geometry
+**Partial** non-null only when `includeProposed` was set and _that_ lookup
+failed. The two datasets are queried independently, so a proposal-layer outage
+never destroys the legal-protection answer, which is the part that matters. A
+failure of the current-protection lookup **is** an error: it is the reason the
+tool exists.
+**Warnings** Naturbase-scope note; CRS note; "a proposal carries no legal effect";
+geometry omissions; truncation; the proposal-lookup failure when it happened.
+**Errors** provider failure, rate limit, timeout, cancellation.
+
+**Positive example.** "Ligger punktet 61.1, 8.1 i et verneområde?" →
+`{ latitude: 61.1, longitude: 8.1 }`.
+**Routes elsewhere.** "Which reserves are in this valley?" →
+`search_protected_areas`.
+
+---
+
+## 24. `search_protected_areas`
+
+**Title:** Search protected areas in an area
+**SDK:** `environment.searchProtectedAreas()` · **Provider:** Miljødirektoratet /
+Naturbase · **Config:** none
+
+**Description.** List every conservation area intersecting a bounded WGS84
+rectangle, with the same attributes as the point lookup.
+
+**Use this when** the user asks which reserves or parks lie within a region,
+valley, fjord or municipality-sized window.
+
+**Do not use this** for a single site (`get_protected_areas_at`), and do not treat
+one page as a complete inventory of the region.
+
+**Input**
+
+| Field             | Type             | Default | Limit     |
+| ----------------- | ---------------- | ------- | --------- |
+| `boundingBox`     | object, required | —       | see below |
+| `includeGeometry` | boolean          | `false` | —         |
+| `limit`           | integer          | 20      | 1–100     |
+| `offset`          | integer          | 0       | 0–10000   |
+
+`boundingBox` is `{ south, west, north, east }` in WGS84 degrees. `north` must
+exceed `south` and `east` must exceed `west`; a box crossing the antimeridian is
+refused because the SDK does not support one. The span is capped at **2° of
+latitude by 4° of longitude — a limit of this MCP server, not of
+Miljødirektoratet**, which publishes no maximum extent. A bounded first page of a
+country-sized box is an arbitrary sample rather than a survey, so the request is
+refused instead of answered misleadingly.
+
+**Output** `{ boundingBox, protectedAreas[], pagination }`
+**Budget** 20 default / 100 max; at most 3 provider requests per call
+**Continuation** `{ hasMore, nextArguments: { …input, offset } }` when the SDK
+reports the walk was truncated.
+**Warnings** Naturbase-scope note; CRS note; "this page is not a complete
+inventory of the area"; geometry omissions; truncation.
+**Errors** provider failure, rate limit, timeout, cancellation.
+
+**Positive example.** "List the nature reserves between 61.0N 8.0E and 61.2N
+8.4E" → `{ boundingBox: { south: 61.0, west: 8.0, north: 61.2, east: 8.4 } }`.
+**Routes elsewhere.** "Is this exact spot protected?" →
+`get_protected_areas_at`.
+
+---
+
+## 25. `get_nature_types_at`
+
+**Title:** Get mapped nature localities at a coordinate
+**SDK:** `environment.getNatureTypesAt()` · **Provider:** Miljødirektoratet /
+Naturbase · **Config:** none
+
+**Description.** Identify mapped NiN nature localities of national importance at
+one coordinate — habitat type and NiN code, locality quality, condition,
+biodiversity value, major ecosystem, red-list and near-threatened flags, survey
+year, stated uncertainty and the fact sheet.
+
+**Use this when** the user asks what habitat or ecosystem has been recorded at a
+place, or whether a threatened nature type is registered there.
+
+**Do not use this** for legal protection status (`get_protected_areas_at`), and do
+not conclude from an empty result that the habitat is unremarkable: most of the
+country has never been surveyed for these localities.
+
+**Input**
+
+| Field             | Type             | Default | Limit               |
+| ----------------- | ---------------- | ------- | ------------------- |
+| `latitude`        | number, required | —       | −90 to 90, finite   |
+| `longitude`       | number, required | —       | −180 to 180, finite |
+| `includeGeometry` | boolean          | `false` | —                   |
+| `limit`           | integer          | 10      | 1–50                |
+
+**Output** `{ location, natureTypes[], pagination }`
+**Budget** 10 default / 50 max · typical 2–8 KB without geometry
+**Dataset scope** the modern NiN important/red-listed/central-ecosystem
+localities selected for SDK 0.8.0. Legacy DN-håndbok 13 localities, species
+observations and locally valuable nature are separate layers this server does not
+query.
+**Warnings** Naturbase-scope note; CRS note; the NiN selection note; a
+surveyor-flagged poorly-delimited locality; geometry omissions; truncation.
+**Errors** provider failure, rate limit, timeout, cancellation.
+
+**Positive example.** "Er det registrert truede naturtyper her?" →
+`{ latitude: 63.74, longitude: 9.22 }`.
+**Routes elsewhere.** "Is it forest or bog?" → `get_land_resources_at`.
+
+---
+
+## 26. `get_intervention_free_nature_at`
+
+**Title:** Get intervention-free nature status at a coordinate
+**SDK:** `environment.getInterventionFreeAreasAt()` · **Provider:**
+Miljødirektoratet / Naturbase · **Config:** none
+
+**Description.** Tell whether a coordinate lay inside Norway's January 2023
+intervention-free nature (INON) zones, the standard national indicator of
+remaining wilderness-like land. Zone `1` is 1–3 km from major infrastructure,
+zone `2` is 3–5 km, and zone `v` is at least 5 km.
+
+**Use this when** the user asks how untouched or roadless somewhere is, or how a
+development would affect wilderness-like land.
+
+**Do not use this** as a conservation status — it confers no protection whatever —
+and do not present it as current.
+
+**Input**
+
+| Field             | Type             | Default | Limit               |
+| ----------------- | ---------------- | ------- | ------------------- |
+| `latitude`        | number, required | —       | −90 to 90, finite   |
+| `longitude`       | number, required | —       | −180 to 180, finite |
+| `includeGeometry` | boolean          | `false` | —                   |
+| `limit`           | integer          | 5       | **2**–25            |
+
+**The minimum limit is 2, not 1.** The SDK derives its upstream page size from
+the remaining limit, so a limit of 1 asks Miljødirektoratet's WFS for `COUNT=1`,
+and whenever that request would match a zone the service answers with a page the
+SDK rejects as invalid (`upstream_invalid_response`). Verified live against SDK
+0.8.0 and deterministic; the ArcGIS-backed Naturbase layers answer a limit of 1
+without trouble. Refusing the one input known to break is a schema decision and
+belongs here; rewriting the caller's limit silently would answer a different
+question from the one asked.
+
+**Output** `{ location, interventionFreeAreas[], pagination }`
+**Budget** 5 default / 25 max · typical 1–4 KB without geometry
+**Dataset scope** the January 2023 status only, with official zones `1`, `2` and
+`v`. Infrastructure built since that date is not reflected.
+**Warnings** vintage note; Naturbase-scope note; CRS note; on an empty result, an
+explicit statement that the point lay within roughly a kilometre of major
+infrastructure at that date and that this says nothing about ecological value;
+geometry omissions; truncation.
+**Errors** provider failure, rate limit, timeout, cancellation.
+
+**Positive example.** "Er området inngrepsfri natur?" →
+`{ latitude: 61.1, longitude: 8.1 }`.
+**Routes elsewhere.** "Is it legally protected?" → `get_protected_areas_at`.
+
+---
+
+## 27. `get_land_resources_at`
+
+**Title:** Get AR50 land-resource classification at a coordinate
+**SDK:** `land.getLandResourcesAt()` · **Provider:** NIBIO · **Config:** none
+
+**Description.** Classify the ground at one coordinate using NIBIO's generalized
+AR50 land-resource map: land type, forest productivity, tree type, agricultural
+potential and vegetation cover.
+
+**Use this when** the user asks what kind of terrain, forest, farmland, bog or
+glacier is at a place.
+
+**Do not use this** at property precision, and not for conservation status
+(`get_protected_areas_at`).
+
+**Input**
+
+| Field             | Type             | Default | Limit               |
+| ----------------- | ---------------- | ------- | ------------------- |
+| `latitude`        | number, required | —       | −90 to 90, finite   |
+| `longitude`       | number, required | —       | −180 to 180, finite |
+| `includeGeometry` | boolean          | `false` | —                   |
+| `limit`           | integer          | 5       | 1–25                |
+
+**Output** `{ location, landResources[], pagination }`
+**Budget** 5 default / 25 max · typical 1–4 KB without geometry
+**Dataset scope** AR50 targets scales of roughly 1:20,000 to 1:100,000 and may
+merge areas below about 15 decares into a surrounding class, so a polygon is not
+a property boundary. The detailed AR5 map, agricultural-land records and soil or
+cultivation-suitability products are separate agreement-based datasets this
+server does not provide.
+**Class codes** only `landTypeCode` is given an English label, from the published
+SOSI `ARTYPE` list (10 built-up, 20 agricultural, 30 forest, 50 open firm ground,
+60 mire, 70 snow/glacier, 81 freshwater, 82 sea, 99 not mapped).
+`forestProductivityCode`, `treeTypeCode`, `agricultureCode` and
+`vegetationCoverCode` are returned **exactly as NIBIO published them**, because
+restating a land classification this project cannot cite would be worse than
+returning the code. NIBIO publishes those code lists with the AR50 WFS.
+**Warnings** AR50-scope note; the class-code note; CRS note; a land-type code
+outside the labelled list; geometry omissions; truncation.
+**Errors** provider failure, rate limit, timeout, cancellation.
+
+**Positive example.** "Hva slags arealtype er det her?" →
+`{ latitude: 61.1, longitude: 8.1 }`.
+**Routes elsewhere.** "Which habitat is registered here?" →
+`get_nature_types_at`.
+
+---
+
+## 28. `get_nature_profile`
+
+**Title:** Get nature profile for a coordinate
+**SDK:** `profiles.natureAtLocation()` · **Providers:** Miljødirektoratet /
+Naturbase + NIBIO + Kartverket · **Config:** none
+
+**Description.** Answer one Norwegian coordinate from three agencies at once,
+composing protected areas, proposed protected areas, mapped nature localities,
+intervention-free status, AR50 land-resource classes, and the nearest official
+Kartverket place name with its municipality and county.
+
+**Use this when** the user asks broadly what the nature at a place is like, or
+wants several of these answers together.
+
+**Do not use this** when only one dataset is wanted — the single-purpose tools
+return more detail per feature and cost one provider request — and do not read an
+empty section as proof that nothing of environmental value exists there.
+
+**Input**
+
+| Field             | Type             | Default | Limit               |
+| ----------------- | ---------------- | ------- | ------------------- |
+| `latitude`        | number, required | —       | −90 to 90, finite   |
+| `longitude`       | number, required | —       | −180 to 180, finite |
+| `includeGeometry` | boolean          | `false` | —                   |
+| `limit`           | integer          | 10      | **2**–50            |
+
+`limit` applies to each dataset independently. Its floor is 2 for the reason
+documented under §26: the same limit reaches the intervention-free WFS, and a
+limit of 1 costs that section on every call.
+
+**Output** `{ location, municipality|null, nearestPlace|null,
+protectedAreas[]|null, proposedProtectedAreas[]|null, natureTypes[]|null,
+interventionFreeAreas[]|null, landResources[]|null, pagination{…per section},
+compositeSource, components[] }`
+
+**`null` versus `[]` is load-bearing.** A `null` section means its provider
+failed; an empty array means the provider answered and holds nothing at that
+point. Collapsing the two would let a model report an outage as an absence of
+nature.
+
+**Partial results.** Each of the six lookups runs independently inside the SDK.
+One provider failing costs only its own section: the rest are returned, the
+failure appears in `components` with `reason: "provider-error"`, the SDK's own
+message is preserved verbatim in the warnings, and `partial.missing` names the
+section. Caller cancellation still rejects the whole call.
+
+**Attribution.** The profile's top-level `source` is a **synthetic composite**
+(`naturbase+nibio+kartverket`) that the SDK builds for the composition itself; it
+carries no licence and no attribution. It is preserved in the payload as
+`compositeSource` — it is real information about what was composed — but it is
+never used as attribution. The envelope's `sources` is built from the available
+`components` plus the SDK 0.8.0 `sources` array, so every provider that actually
+answered is credited with its own licence, required wording and retrieval time.
+Because the intervention-free layer shares the `naturbase` id but publishes
+different terms, provenance is keyed on the terms as well as the id and **two**
+Naturbase entries are returned rather than one.
+
+**Budget** 10 default / 50 max per dataset; 20 components; 20 provider warnings;
+geometry bounded per feature and per result · typical 5–25 KB without geometry
+**Warnings** all four dataset-scope notes (Naturbase selection, AR50
+generalization, AR50 class codes, INON vintage); CRS note; the SDK's own
+per-provider failure and truncation notices; component omissions; the
+municipality-inference caveat; geometry omissions; truncation.
+**Errors** `provider_error` only when the SDK reports every provider failed;
+rate limit, timeout, cancellation.
+
+**Positive example.** "Tell me about the nature at 61.1, 8.1" →
+`{ latitude: 61.1, longitude: 8.1 }`.
+**Routes elsewhere.** "Just tell me if it's protected" →
+`get_protected_areas_at`.
+
+---
+
+## Geometry
+
+Feature geometry is the largest payload this server can produce, so it is
+governed by one rule stated once and applied by every geospatial tool: **geometry
+is either returned exactly as the provider published it, or not returned at
+all.**
+
+- Off by default. `includeGeometry: true` opts in.
+- A polygon keeps **every** ring: the exterior ring and every interior ring
+  (hole). A multipolygon keeps **every** part. Nothing is simplified, thinned,
+  re-ordered or reduced to a representative shape.
+- A geometry over **4,000 vertices**, or one arriving after a result has spent
+  its **4,000-vertex** allowance, is dropped **whole** and recorded in
+  `truncation` with reason `limit` or `budget` respectively. Both ceilings are
+  this server's, derived from the 120,000-character payload budget — a WGS84
+  position serializes to about 21 characters. Neither provider imposes them.
+- `geometrySummary` is present either way and always reports `type`,
+  `polygonCount`, `holeCount`, `vertexCount`, `included` and, when coordinates
+  are absent, `omittedReason` (`not-requested`, `not-published`, `too-large`,
+  `result-budget`). A caller can therefore always tell that an area has holes or
+  several parts, even when the coordinates were too large to send.
+- `geometry: null` with `omittedReason: "not-published"` is the provider's own
+  null geometry, not a failure. The attributes are still complete.
+- Real geometry routinely exceeds the ceiling: the AR50 polygon at Galdhøpiggen
+  carries 19,403 vertices across 63 rings. No setting of these constants could
+  fit that into one MCP payload, which is why the guard is explicit and reported
+  rather than hidden.
+
+## Coordinate reference systems
+
+Every coordinate crossing this boundary, in or out, is WGS84 decimal degrees.
+GeoJSON coordinates are longitude-first, as RFC 7946 requires.
+
+Naturbase publishes EPSG:25833 and NIBIO EPSG:4258; both convert server-side at
+the provider's request, and the SDK retains the original declaration in
+`sourceCrs`. **Neither the SDK nor this server contains a reprojection engine.**
+An unsupported or inconsistent CRS declaration is rejected as
+`upstream_invalid_response` rather than reinterpreted, because silently treating
+projected coordinates as degrees returns plausible-looking data in the wrong
+place. Areas, distances and overlaps must not be computed from these degrees
+without a proper projection.
+
+## Why no generic map-service tool
+
+No tool here accepts a URL, a host, a service endpoint, a WFS type name or a
+layer name — a property named for any of those would fail
+`tests/unit/server-contract.test.ts`. Generic WFS, WMS, OGC API Features and
+ArcGIS REST proxying is deliberately out of scope, for the same reasons the SDK
+declines it:
+
+- **Provenance.** A caller-supplied endpoint has no licence, no required
+  attribution and no way to distinguish a government service from anything else.
+  Every guarantee in this document depends on knowing which provider answered.
+- **Bounds.** An arbitrary service can return any volume, any geometry
+  complexity and any CRS. The budgets above are only enforceable against known
+  datasets.
+- **Reach.** A URL parameter makes the tool a general-purpose HTTP fetcher that a
+  model can point at any host this process can reach.
+
+The catalogue tools still let a model _discover_ any published Norwegian service
+and tell the user where it is. They just do not fetch it.
+
 ## Routing-ambiguity register
 
 Pairs deliberately separated by wording, and the discriminator used:
@@ -866,6 +1335,14 @@ Pairs deliberately separated by wording, and the discriminator used:
 | 16 vs 17 | Several candidates by description vs. one exact identifier        |
 | 18 vs 19 | Discover sites by area or holder vs. one known site number        |
 | 20 vs 6  | Conditions on the water (waves, current) vs. in the air (wind)    |
+| 21 vs 22 | Which datasets exist vs. the terms of one known record            |
+| 21 vs 7  | Catalogue metadata about hazards vs. a live hazard warning        |
+| 23 vs 24 | One coordinate vs. a bounded rectangle                            |
+| 23 vs 25 | Legal protection vs. surveyed habitat                             |
+| 25 vs 27 | Mapped nature locality vs. generalized land cover                 |
+| 26 vs 23 | Distance from infrastructure vs. legal protection                 |
+| 28 vs 23 | Several datasets at once vs. one dataset in full detail           |
+| 28 vs 27 | Combined nature overview vs. land classification alone            |
 
 These are exercised directly by the evaluation corpus in
 `tests/eval/tool-routing.json`.

@@ -401,6 +401,267 @@ describeLive("live providers (opt-in, low volume)", () => {
     }
   });
 
+  // -------------------------------------------------------------------------
+  // Geospatial providers — all anonymous, all bounded to one small request.
+  // -------------------------------------------------------------------------
+
+  it("Geonorge returns a bounded, well-formed dataset catalogue search", async () => {
+    const result = await call("search_geonorge_datasets", { query: "verneområder", limit: 3 });
+
+    expect(result.isError).toBeFalsy();
+    const envelope = result.structuredContent as {
+      data: { datasets: { id: string }[]; pagination: { totalItems: number } };
+      sources: { id: string; license?: string; attribution?: string }[];
+    };
+    expect(Array.isArray(envelope.data.datasets)).toBe(true);
+    expect(envelope.data.datasets.length).toBeLessThanOrEqual(3);
+    expect(envelope.sources[0]?.id).toBe("geonorge");
+    expect(envelope.sources[0]?.attribution).toContain("Kartverket");
+  });
+
+  it("Geonorge returns a full catalogue record for an identifier it just published", async () => {
+    // Chained off the search rather than hard-coding a UUID, so this cannot rot
+    // when Kartverket retires a record.
+    const search = await call("search_geonorge_datasets", { query: "naturvernområder", limit: 1 });
+    if (search.isError) return;
+
+    const first = (search.structuredContent as { data: { datasets: { id: string }[] } }).data
+      .datasets[0];
+    if (first === undefined) return;
+
+    const result = await call("get_geonorge_metadata", { id: first.id });
+    expect(result.isError).toBeFalsy();
+
+    const envelope = result.structuredContent as {
+      data: { id: string; title: string; type: string; distributions: unknown[] };
+      sources: { id: string }[];
+      warnings: string[];
+    };
+    expect(envelope.data.id).toBe(first.id);
+    expect(typeof envelope.data.title).toBe("string");
+    expect(envelope.sources[0]?.id).toBe("geonorge");
+    // No named individual survives the projection, against the live record.
+    expect(JSON.stringify(envelope.data)).not.toMatch(/"email"/);
+  });
+
+  it("Naturbase answers a protected-area point lookup inside Jotunheimen", async () => {
+    // Galdhøpiggen: inside Jotunheimen national park, so a match is expected —
+    // but an empty result is tolerated rather than failed, since the assertion
+    // that matters is the shape, the bound and the attribution.
+    const result = await call("get_protected_areas_at", {
+      latitude: 61.6365,
+      longitude: 8.3126,
+      limit: 3,
+    });
+
+    expect(result.isError).toBeFalsy();
+    const envelope = result.structuredContent as {
+      data: { protectedAreas: { id: string; geometrySummary: { included: boolean } }[] };
+      sources: { id: string; license?: string; attribution?: string }[];
+      warnings: string[];
+    };
+
+    expect(Array.isArray(envelope.data.protectedAreas)).toBe(true);
+    expect(envelope.data.protectedAreas.length).toBeLessThanOrEqual(3);
+    // Geometry is off by default even against the live provider.
+    for (const area of envelope.data.protectedAreas) {
+      expect(area.geometrySummary.included).toBe(false);
+    }
+    expect(envelope.sources[0]?.id).toBe("naturbase");
+    expect(envelope.sources[0]?.license).toContain("NLOD");
+    expect(envelope.sources[0]?.attribution).toContain("Miljødirektoratet");
+    // The safety caveat must survive contact with the real provider.
+    expect(envelope.warnings.join(" ")).toContain("not evidence that no species");
+  });
+
+  it("returns real live geometry, with its holes and parts intact and within budget", async () => {
+    const result = await call("get_protected_areas_at", {
+      latitude: 61.6365,
+      longitude: 8.3126,
+      limit: 1,
+      includeGeometry: true,
+    });
+
+    expect(result.isError).toBeFalsy();
+    const envelope = result.structuredContent as {
+      data: {
+        protectedAreas: {
+          geometry: { type: string; coordinates: unknown[] } | null;
+          geometrySummary: {
+            type: string;
+            polygonCount: number;
+            holeCount: number;
+            vertexCount: number;
+            included: boolean;
+            omittedReason?: string;
+          };
+        }[];
+      };
+    };
+
+    const area = envelope.data.protectedAreas[0];
+    if (area === undefined) return; // an empty result is a valid outcome
+
+    if (area.geometry === null) {
+      // Refusal is allowed, but it must be explained rather than silent.
+      expect(area.geometrySummary.included).toBe(false);
+      expect(area.geometrySummary.omittedReason).toBeTruthy();
+    } else {
+      expect(["Polygon", "MultiPolygon"]).toContain(area.geometry.type);
+      expect(area.geometry.coordinates.length).toBe(
+        area.geometry.type === "Polygon"
+          ? 1 + area.geometrySummary.holeCount
+          : area.geometrySummary.polygonCount,
+      );
+      expect(area.geometrySummary.included).toBe(true);
+    }
+    // Whatever happened, the payload stayed inside the serialized budget.
+    expect(JSON.stringify(result.structuredContent).length).toBeLessThanOrEqual(120_000);
+  });
+
+  it("Naturbase answers a bounded protected-area bounding-box search", async () => {
+    const result = await call("search_protected_areas", {
+      // A small window inside Jotunheimen, far below this server's span cap.
+      boundingBox: { south: 61.5, west: 8.2, north: 61.7, east: 8.5 },
+      limit: 5,
+    });
+
+    expect(result.isError).toBeFalsy();
+    const envelope = result.structuredContent as {
+      data: {
+        protectedAreas: unknown[];
+        pagination: { returned: number; truncated: boolean; hasMore: boolean };
+      };
+      sources: { id: string }[];
+    };
+
+    expect(envelope.data.protectedAreas.length).toBeLessThanOrEqual(5);
+    expect(envelope.data.pagination.hasMore).toBe(envelope.data.pagination.truncated);
+    expect(envelope.sources[0]?.id).toBe("naturbase");
+  });
+
+  it("Naturbase answers a nature-locality point lookup, or an empty one, without failing", async () => {
+    const result = await call("get_nature_types_at", {
+      latitude: 63.4305,
+      longitude: 10.3951,
+      limit: 3,
+    });
+
+    expect(result.isError).toBeFalsy();
+    const envelope = result.structuredContent as {
+      data: { natureTypes: unknown[] };
+      sources: { id: string }[];
+      warnings: string[];
+    };
+    expect(Array.isArray(envelope.data.natureTypes)).toBe(true);
+    expect(envelope.sources[0]?.id).toBe("naturbase");
+    expect(envelope.warnings.join(" ")).toContain("never been surveyed");
+  });
+
+  it("Naturbase answers intervention-free nature with its own attribution wording", async () => {
+    const result = await call("get_intervention_free_nature_at", {
+      latitude: 61.6365,
+      longitude: 8.3126,
+      limit: 2,
+    });
+
+    expect(result.isError).toBeFalsy();
+    const envelope = result.structuredContent as {
+      data: { interventionFreeAreas: { zone: string; statusDate: string }[] };
+      sources: { id: string; license?: string; attribution?: string }[];
+      warnings: string[];
+    };
+
+    expect(Array.isArray(envelope.data.interventionFreeAreas)).toBe(true);
+    for (const zone of envelope.data.interventionFreeAreas) {
+      expect(["1", "2", "v"]).toContain(zone.zone);
+      expect(zone.statusDate).toBe("2023-01");
+    }
+    // The layer's distinct licence and wording must survive the live path, not
+    // be collapsed into the general Naturbase terms.
+    expect(envelope.sources[0]?.id).toBe("naturbase");
+    if (envelope.data.interventionFreeAreas.length > 0) {
+      expect(envelope.sources[0]?.attribution).toContain("inngrepsfri natur");
+    }
+    expect(envelope.warnings.join(" ")).toContain("January 2023 status only");
+  });
+
+  it("NIBIO classifies land resources at a mainland coordinate", async () => {
+    const result = await call("get_land_resources_at", {
+      latitude: 61.6365,
+      longitude: 8.3126,
+      limit: 2,
+    });
+
+    expect(result.isError).toBeFalsy();
+    const envelope = result.structuredContent as {
+      data: { landResources: { landTypeCode?: string; landType?: string }[] };
+      sources: { id: string; license?: string; attribution?: string }[];
+      warnings: string[];
+    };
+
+    expect(Array.isArray(envelope.data.landResources)).toBe(true);
+    expect(envelope.sources[0]?.id).toBe("nibio");
+    expect(envelope.sources[0]?.attribution).toBe("Kilde: NIBIO.");
+    expect(envelope.warnings.join(" ")).toContain("generalized national land-resource map");
+  });
+
+  it("composes a live nature profile that credits every provider that answered", async () => {
+    const result = await call("get_nature_profile", {
+      latitude: 61.6365,
+      longitude: 8.3126,
+      limit: 3,
+    });
+
+    expect(result.isError).toBeFalsy();
+    const envelope = result.structuredContent as {
+      data: {
+        compositeSource: { id: string };
+        components: { section: string; status: string; provider: string }[];
+      };
+      sources: { id: string; license?: string; attribution?: string }[];
+      partial: { missing: string[] } | null;
+    };
+
+    // The synthetic composite is preserved as data but never as attribution.
+    expect(envelope.data.compositeSource.id).toContain("+");
+    expect(envelope.sources.map((source) => source.id)).not.toContain(
+      envelope.data.compositeSource.id,
+    );
+    expect(envelope.sources.length).toBeGreaterThan(0);
+    for (const source of envelope.sources) {
+      expect(source.license, `${source.id} licence`).toBeTruthy();
+      expect(source.attribution, `${source.id} attribution`).toBeTruthy();
+    }
+    // Every dataset reports its own outcome, whether or not it succeeded.
+    expect(envelope.data.components.length).toBeGreaterThan(0);
+  });
+
+  it("refuses an oversized live bounding box without contacting the provider", async () => {
+    const started = Date.now();
+    const result = await call("search_protected_areas", {
+      // The whole country: far past this server's span cap.
+      boundingBox: { south: 58, west: 4, north: 71, east: 31 },
+    });
+
+    expect(result.isError).toBe(true);
+    const text = (result.content as { type: string; text: string }[])[0]!.text;
+    expect(text).toContain("limit of this MCP server");
+    // Rejected locally: no provider round trip could have fitted in this time
+    // (the courtesy pause is included in the elapsed measurement).
+    expect(Date.now() - started).toBeLessThan(PAUSE_MS + 2_000);
+  });
+
+  it("never accepts a service URL, even against live providers", async () => {
+    const result = await call("get_geonorge_metadata", {
+      id: "https://kart.miljodirektoratet.no/geoserver/wfs",
+    });
+
+    expect(result.isError).toBe(true);
+    const text = (result.content as { type: string; text: string }[])[0]!.text;
+    expect(text.toLowerCase()).toContain("identifier");
+  });
+
   it("skips the weather tool cleanly when no contact email is configured", async () => {
     const result = await call("get_norwegian_weather_forecast", {
       latitude: 59.9139,

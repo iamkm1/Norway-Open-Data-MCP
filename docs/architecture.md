@@ -46,7 +46,7 @@ below it.
               ↓
         tool handlers            src/tools/*.ts
               ↓
-        Norway Open Data SDK     norway-open-data-sdk@0.6.0
+        Norway Open Data SDK     norway-open-data-sdk@0.8.0
               ↓
         public Norwegian APIs
 ```
@@ -200,13 +200,14 @@ loudly if a future change introduces an HTTP path.
 | Test            | Vitest 4 | Native ESM + TS, v8 coverage, no transform config.                                                                                                                          |
 | Package manager | pnpm 11  | Strict node_modules layout catches undeclared-dependency bugs before publish.                                                                                               |
 
-## Why the tool count is 20, not one per SDK method
+## Why the tool count is 28, not one per SDK method
 
-The SDK exposes 70+ public methods across 18 namespaces — the `klass` namespace
-alone has 14 and `ais` has 9. A server with one tool per method is unusable: tool
+The SDK exposes 80+ public methods across 21 namespaces — the `klass` namespace
+alone has 14, `ais` has 9, and `geodata`, `environment` and `land` add 15 more. A server with one tool per method is unusable: tool
 descriptions are routing instructions, and an AI model given dozens of
 overlapping options routes worse than one given a curated set. So SSB Klass is
-exposed as two tools, not fourteen, and AIS as three, not nine. Selection
+exposed as two tools, not fourteen, AIS as three, not nine, and the three
+geospatial namespaces as eight, not fifteen. Selection
 criteria, in priority order:
 
 1. Answers a question a person actually asks about Norway.
@@ -221,8 +222,36 @@ Several tools are **compositions or routers**, not thin method wrappers:
 `query_norwegian_statistics` (metadata or data through one schema),
 `search_norwegian_classification_codes` (exact `getCode` vs. `searchCodes`
 pattern behind one contract), `get_vessel_track` (last-24-hours endpoint vs.
-ranged query), and `get_marine_forecast` (two independent models merged with
-per-section failure handling).
+ranged query), `get_marine_forecast` (two independent models merged with
+per-section failure handling), and `get_protected_areas_at` (two Naturbase
+datasets queried independently so a proposal-layer outage cannot destroy the
+legal-protection answer).
+
+### Geospatial output is governed by one rule
+
+Feature geometry is the largest payload this server can produce — a single live
+AR50 polygon carries 19,403 vertices across 63 rings, several times an entire MCP
+payload budget. Rather than trimming coordinates, the geospatial tools apply one
+rule: **geometry is returned exactly as the provider published it, or not
+returned at all.** Every ring of a polygon and every part of a multipolygon
+survives, or the geometry is omitted whole and the omission is recorded in
+`truncation` with a `geometrySummary` that still reports part, hole and vertex
+counts. A simplified polygon looks authoritative and is not; a multipolygon
+reduced to its largest part is a different area than the one published.
+
+The vertex ceilings are derived from `BUDGET.maxSerializedChars` rather than
+chosen freely, so the explicit, reported guard cuts before the generic size guard
+— which halves whole arrays and would discard features to keep coordinates.
+
+### No generic service proxy
+
+`src/tools/` contains no tool that accepts a URL, host, endpoint, WFS type name or
+layer name, and `tests/unit/server-contract.test.ts` fails the build if one
+appears. A URL-taking tool would be a general-purpose HTTP fetcher: it would make
+provenance unknowable, put unbounded payloads of arbitrary CRS into a context
+window, and let a model reach any host this process can reach. The Geonorge
+catalogue tools still let a model discover any published Norwegian service and
+report where it is — they simply never call it.
 
 ### The one streaming method, and why it is still a request/response tool
 

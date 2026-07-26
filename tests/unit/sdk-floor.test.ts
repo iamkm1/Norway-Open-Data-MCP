@@ -11,6 +11,10 @@
  *   and OAuth2 client-credentials support, which the eight maritime tools call
  *   directly. On 0.6.0 those namespaces do not exist, so the failure would be a
  *   `TypeError` at call time rather than anything a user could act on.
+ * - 0.8.0 added `sdk.geodata`, `sdk.environment`, `sdk.land` and
+ *   `profiles.natureAtLocation()`, which the eight geospatial tools call
+ *   directly, plus `OpenDataResponse.sources` — the array the profile tools now
+ *   union into their provenance. On 0.7.0 none of that exists.
  *
  * The SDK is pre-1.0, so its breaking (and feature) changes ship as minor
  * versions and a caret range does not float across them automatically — the
@@ -25,7 +29,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
-const REQUIRED_MINIMUM = "0.7.0";
+const REQUIRED_MINIMUM = "0.8.0";
 const SDK = "norway-open-data-sdk";
 
 const repoFile = (relative: string): string =>

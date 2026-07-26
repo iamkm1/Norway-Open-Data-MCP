@@ -9,7 +9,9 @@
       "expectedTool": "search_norwegian_companies",
       "mustNotSelect": ["get_norwegian_company_profile"],
       "reason": "The organization number is what is being asked for, so it cannot already be known.",
-      "requiredArguments": { "name": "Equinor" }
+      "requiredArguments": {
+        "name": "Equinor"
+      }
     },
     {
       "id": "company-search-by-name-no",
@@ -18,7 +20,9 @@
       "expectedTool": "search_norwegian_companies",
       "mustNotSelect": ["get_norwegian_company_profile"],
       "reason": "Name is known, number is not.",
-      "requiredArguments": { "name": "Norges Bank" }
+      "requiredArguments": {
+        "name": "Norges Bank"
+      }
     },
     {
       "id": "company-list-by-municipality",
@@ -27,7 +31,9 @@
       "expectedTool": "search_norwegian_companies",
       "mustNotSelect": ["get_norwegian_municipality_profile", "get_norwegian_company_profile"],
       "reason": "A list of organizations filtered by municipality, not a municipality profile.",
-      "requiredArguments": { "municipalityCode": "4601" },
+      "requiredArguments": {
+        "municipalityCode": "4601"
+      },
       "expectedClarification": "The municipality code for Bergen must be known or resolved; the tool takes a four-digit code, not a name."
     },
     {
@@ -37,7 +43,9 @@
       "expectedTool": "get_norwegian_company_profile",
       "mustNotSelect": ["search_norwegian_companies"],
       "reason": "An exact nine-digit organization number is present.",
-      "requiredArguments": { "organizationNumber": "923609016" }
+      "requiredArguments": {
+        "organizationNumber": "923609016"
+      }
     },
     {
       "id": "company-profile-by-number-no",
@@ -46,7 +54,9 @@
       "expectedTool": "get_norwegian_company_profile",
       "mustNotSelect": ["search_norwegian_companies"],
       "reason": "Bankruptcy status is part of the single-company profile; the number is given.",
-      "requiredArguments": { "organizationNumber": "923 609 016" }
+      "requiredArguments": {
+        "organizationNumber": "923 609 016"
+      }
     },
     {
       "id": "company-employees",
@@ -55,7 +65,9 @@
       "expectedTool": "get_norwegian_company_profile",
       "mustNotSelect": ["query_norwegian_statistics", "search_norwegian_companies"],
       "reason": "Employee count for one known organization comes from the register, not from statistics.",
-      "requiredArguments": { "organizationNumber": "923609016" }
+      "requiredArguments": {
+        "organizationNumber": "923609016"
+      }
     },
     {
       "id": "address-postal-code",
@@ -64,7 +76,9 @@
       "expectedTool": "search_norwegian_addresses",
       "mustNotSelect": ["get_norwegian_location_profile"],
       "reason": "A lookup of address facts, with no conditions or warnings requested.",
-      "requiredArguments": { "query": "Karl Johans gate 1" }
+      "requiredArguments": {
+        "query": "Karl Johans gate 1"
+      }
     },
     {
       "id": "address-exists",
@@ -73,7 +87,9 @@
       "expectedTool": "search_norwegian_addresses",
       "mustNotSelect": ["get_norwegian_location_profile"],
       "reason": "Verification and disambiguation, not enrichment.",
-      "requiredArguments": { "query": "Storgata 47B Lillehammer" }
+      "requiredArguments": {
+        "query": "Storgata 47B Lillehammer"
+      }
     },
     {
       "id": "address-coordinates",
@@ -82,7 +98,9 @@
       "expectedTool": "search_norwegian_addresses",
       "mustNotSelect": ["get_norwegian_location_profile", "get_norwegian_weather_forecast"],
       "reason": "Only the coordinate is wanted, not conditions at it.",
-      "requiredArguments": { "query": "Bryggen 5 Bergen" }
+      "requiredArguments": {
+        "query": "Bryggen 5 Bergen"
+      }
     },
     {
       "id": "address-disambiguation",
@@ -91,7 +109,10 @@
       "expectedTool": "search_norwegian_addresses",
       "mustNotSelect": ["get_norwegian_location_profile"],
       "reason": "Explicitly a disambiguation request across several candidates.",
-      "requiredArguments": { "query": "Storgata 1", "limit": 25 }
+      "requiredArguments": {
+        "query": "Storgata 1",
+        "limit": 25
+      }
     },
     {
       "id": "location-profile-conditions",
@@ -100,7 +121,9 @@
       "expectedTool": "get_norwegian_location_profile",
       "mustNotSelect": ["search_norwegian_addresses", "get_norwegian_weather_forecast"],
       "reason": "Conditions at one specific known address, combining several providers.",
-      "requiredArguments": { "query": "Storgata 1 Lillehammer" }
+      "requiredArguments": {
+        "query": "Storgata 1 Lillehammer"
+      }
     },
     {
       "id": "location-profile-hazard-at-address",
@@ -109,7 +132,9 @@
       "expectedTool": "get_norwegian_location_profile",
       "mustNotSelect": ["get_current_norwegian_hazards"],
       "reason": "Warnings tied to one specific address use the profile's administrative-area matching.",
-      "requiredArguments": { "query": "Bryggen 5 Bergen" }
+      "requiredArguments": {
+        "query": "Bryggen 5 Bergen"
+      }
     },
     {
       "id": "location-profile-roads",
@@ -118,7 +143,9 @@
       "expectedTool": "get_norwegian_location_profile",
       "mustNotSelect": ["search_norwegian_addresses"],
       "reason": "Nearby road segments are part of the location profile.",
-      "requiredArguments": { "query": "Prinsens gate 1 Trondheim" }
+      "requiredArguments": {
+        "query": "Prinsens gate 1 Trondheim"
+      }
     },
     {
       "id": "municipality-population-no",
@@ -127,7 +154,9 @@
       "expectedTool": "get_norwegian_municipality_profile",
       "mustNotSelect": ["query_norwegian_statistics"],
       "reason": "A ready-made municipality answer in one call; no table ID needed.",
-      "requiredArguments": { "query": "Tromsø" }
+      "requiredArguments": {
+        "query": "Tromsø"
+      }
     },
     {
       "id": "municipality-population-en",
@@ -136,7 +165,9 @@
       "expectedTool": "get_norwegian_municipality_profile",
       "mustNotSelect": ["query_norwegian_statistics"],
       "reason": "Four-digit municipality code with a standard demographic question.",
-      "requiredArguments": { "query": "0301" }
+      "requiredArguments": {
+        "query": "0301"
+      }
     },
     {
       "id": "municipality-life-expectancy",
@@ -145,7 +176,9 @@
       "expectedTool": "get_norwegian_municipality_profile",
       "mustNotSelect": ["query_norwegian_statistics"],
       "reason": "Life expectancy is a profile section sourced from FHI.",
-      "requiredArguments": { "query": "Stavanger" }
+      "requiredArguments": {
+        "query": "Stavanger"
+      }
     },
     {
       "id": "municipality-growth",
@@ -154,7 +187,9 @@
       "expectedTool": "get_norwegian_municipality_profile",
       "mustNotSelect": ["query_norwegian_statistics"],
       "reason": "Year-over-year change is included in the profile.",
-      "requiredArguments": { "query": "Bodø" }
+      "requiredArguments": {
+        "query": "Bodø"
+      }
     },
     {
       "id": "municipality-business-count",
@@ -163,7 +198,9 @@
       "expectedTool": "get_norwegian_municipality_profile",
       "mustNotSelect": ["search_norwegian_companies"],
       "reason": "A count, not a list; the profile returns the registered total directly.",
-      "requiredArguments": { "query": "Kristiansand" }
+      "requiredArguments": {
+        "query": "Kristiansand"
+      }
     },
     {
       "id": "weather-coordinate",
@@ -172,7 +209,11 @@
       "expectedTool": "get_norwegian_weather_forecast",
       "mustNotSelect": ["get_current_norwegian_hazards", "get_norwegian_location_profile"],
       "reason": "A multi-hour forecast for a bare coordinate.",
-      "requiredArguments": { "latitude": 59.9139, "longitude": 10.7522, "hours": 48 }
+      "requiredArguments": {
+        "latitude": 59.9139,
+        "longitude": 10.7522,
+        "hours": 48
+      }
     },
     {
       "id": "weather-tomorrow-no",
@@ -181,7 +222,10 @@
       "expectedTool": "get_norwegian_weather_forecast",
       "mustNotSelect": ["get_current_norwegian_hazards"],
       "reason": "Forecast, not a hazard warning.",
-      "requiredArguments": { "latitude": 60.39, "longitude": 5.32 }
+      "requiredArguments": {
+        "latitude": 60.39,
+        "longitude": 5.32
+      }
     },
     {
       "id": "weather-rain",
@@ -190,7 +234,10 @@
       "expectedTool": "get_norwegian_weather_forecast",
       "mustNotSelect": ["get_current_norwegian_hazards"],
       "reason": "Precipitation is forecast data even though heavy rain sounds hazard-adjacent.",
-      "requiredArguments": { "latitude": 60.3913, "longitude": 5.3221 },
+      "requiredArguments": {
+        "latitude": 60.3913,
+        "longitude": 5.3221
+      },
       "expectedClarification": "Bergen must first be resolved to a coordinate; the tool takes latitude and longitude, not a place name."
     },
     {
@@ -200,7 +247,11 @@
       "expectedTool": "get_norwegian_weather_forecast",
       "mustNotSelect": ["get_current_norwegian_hazards"],
       "reason": "Wind speed is a forecast variable.",
-      "requiredArguments": { "latitude": 69.65, "longitude": 18.96, "hours": 12 }
+      "requiredArguments": {
+        "latitude": 69.65,
+        "longitude": 18.96,
+        "hours": 12
+      }
     },
     {
       "id": "hazard-avalanche-no",
@@ -209,7 +260,9 @@
       "expectedTool": "get_current_norwegian_hazards",
       "mustNotSelect": ["get_norwegian_weather_forecast"],
       "reason": "An official avalanche warning, not a weather forecast.",
-      "requiredArguments": { "types": ["avalanche"] }
+      "requiredArguments": {
+        "types": ["avalanche"]
+      }
     },
     {
       "id": "hazard-flood-en",
@@ -231,7 +284,9 @@
       "expectedTool": "get_current_norwegian_hazards",
       "mustNotSelect": ["get_norwegian_weather_forecast", "get_norwegian_location_profile"],
       "reason": "Landslide warnings nationwide, with no specific address given.",
-      "requiredArguments": { "types": ["landslide"] }
+      "requiredArguments": {
+        "types": ["landslide"]
+      }
     },
     {
       "id": "hazard-varsom",
@@ -258,7 +313,9 @@
       "expectedTool": "get_norwegian_electricity_prices",
       "mustNotSelect": ["query_norwegian_statistics"],
       "reason": "Hourly spot price for a bidding zone; Oslo is NO1.",
-      "requiredArguments": { "area": "NO1" }
+      "requiredArguments": {
+        "area": "NO1"
+      }
     },
     {
       "id": "electricity-cheapest-hour",
@@ -267,7 +324,9 @@
       "expectedTool": "get_norwegian_electricity_prices",
       "mustNotSelect": ["query_norwegian_statistics"],
       "reason": "The tool returns the cheapest hour directly; Trondheim is NO3.",
-      "requiredArguments": { "area": "NO3" }
+      "requiredArguments": {
+        "area": "NO3"
+      }
     },
     {
       "id": "electricity-specific-date",
@@ -276,7 +335,10 @@
       "expectedTool": "get_norwegian_electricity_prices",
       "mustNotSelect": ["query_norwegian_statistics"],
       "reason": "A historical day for a named bidding zone.",
-      "requiredArguments": { "area": "NO4", "date": "2026-07-01" }
+      "requiredArguments": {
+        "area": "NO4",
+        "date": "2026-07-01"
+      }
     },
     {
       "id": "electricity-vs-energy-statistics",
@@ -285,7 +347,9 @@
       "expectedTool": "query_norwegian_statistics",
       "mustNotSelect": ["get_norwegian_electricity_prices"],
       "reason": "National production is a statistics table, not an hourly spot price.",
-      "requiredArguments": { "tableId": "08307" },
+      "requiredArguments": {
+        "tableId": "08307"
+      },
       "expectedClarification": "The SSB table ID must be known or asked for; production tables are not spot prices."
     },
     {
@@ -295,7 +359,9 @@
       "expectedTool": "get_norwegian_transport_departures",
       "mustNotSelect": ["search_norwegian_addresses"],
       "reason": "A departure board for a named transit stop.",
-      "requiredArguments": { "stopName": "Majorstuen" }
+      "requiredArguments": {
+        "stopName": "Majorstuen"
+      }
     },
     {
       "id": "transport-departures-en",
@@ -304,7 +370,9 @@
       "expectedTool": "get_norwegian_transport_departures",
       "mustNotSelect": ["search_norwegian_addresses"],
       "reason": "Stop name resolution followed by a departure board.",
-      "requiredArguments": { "stopName": "Oslo S" }
+      "requiredArguments": {
+        "stopName": "Oslo S"
+      }
     },
     {
       "id": "transport-by-stop-id",
@@ -313,7 +381,9 @@
       "expectedTool": "get_norwegian_transport_departures",
       "mustNotSelect": ["search_norwegian_addresses"],
       "reason": "A known Entur stop place ID is supplied directly.",
-      "requiredArguments": { "stopPlaceId": "NSR:StopPlace:58366" }
+      "requiredArguments": {
+        "stopPlaceId": "NSR:StopPlace:58366"
+      }
     },
     {
       "id": "transport-tram",
@@ -322,7 +392,9 @@
       "expectedTool": "get_norwegian_transport_departures",
       "mustNotSelect": ["search_norwegian_addresses"],
       "reason": "Tram departures are part of the same departure board.",
-      "requiredArguments": { "stopName": "Nationaltheatret" }
+      "requiredArguments": {
+        "stopName": "Nationaltheatret"
+      }
     },
     {
       "id": "transport-journey-unsupported",
@@ -341,7 +413,9 @@
       "expectedTool": "query_norwegian_statistics",
       "mustNotSelect": ["get_norwegian_municipality_profile"],
       "reason": "The discovery call: a table ID with no selections.",
-      "requiredArguments": { "tableId": "07459" }
+      "requiredArguments": {
+        "tableId": "07459"
+      }
     },
     {
       "id": "statistics-population-by-age",
@@ -350,7 +424,9 @@
       "expectedTool": "query_norwegian_statistics",
       "mustNotSelect": ["get_norwegian_municipality_profile"],
       "reason": "A custom breakdown by a dimension, which the municipality profile cannot express.",
-      "requiredArguments": { "tableId": "07459" },
+      "requiredArguments": {
+        "tableId": "07459"
+      },
       "expectedClarification": "Value codes must be discovered first by calling without selections; they cannot be guessed."
     },
     {
@@ -360,7 +436,9 @@
       "expectedTool": "query_norwegian_statistics",
       "mustNotSelect": ["get_norwegian_municipality_profile"],
       "reason": "A named SSB table for a non-demographic statistic.",
-      "requiredArguments": { "tableId": "08931" }
+      "requiredArguments": {
+        "tableId": "08931"
+      }
     },
     {
       "id": "statistics-vs-municipality-profile",
@@ -369,7 +447,9 @@
       "expectedTool": "get_norwegian_municipality_profile",
       "mustNotSelect": ["query_norwegian_statistics"],
       "reason": "One number for one municipality: the profile answers it in a single call without a table ID.",
-      "requiredArguments": { "query": "Bergen" }
+      "requiredArguments": {
+        "query": "Bergen"
+      }
     },
     {
       "id": "statistics-with-selection",
@@ -380,7 +460,10 @@
       "reason": "An explicit multi-region selection against a named table.",
       "requiredArguments": {
         "tableId": "07459",
-        "selections": { "Region": ["0301", "5401"], "Tid": ["2025"] }
+        "selections": {
+          "Region": ["0301", "5401"],
+          "Tid": ["2025"]
+        }
       }
     },
     {
@@ -390,7 +473,9 @@
       "expectedTool": "search_norwegian_companies",
       "mustNotSelect": ["get_norwegian_company_profile"],
       "reason": "Only a name is given, so the number must be resolved first.",
-      "requiredArguments": { "name": "Equinor" },
+      "requiredArguments": {
+        "name": "Equinor"
+      },
       "expectedClarification": "If several organizations match the name, ask which one before fetching a profile."
     },
     {
@@ -410,7 +495,9 @@
       "expectedTool": "get_norwegian_municipality_profile",
       "mustNotSelect": ["search_norwegian_addresses", "get_norwegian_location_profile"],
       "reason": "A place named without a street is the municipality, not an address.",
-      "requiredArguments": { "query": "Bergen" }
+      "requiredArguments": {
+        "query": "Bergen"
+      }
     },
     {
       "id": "ambiguous-stop-or-address",
@@ -419,7 +506,9 @@
       "expectedTool": "get_norwegian_transport_departures",
       "mustNotSelect": [],
       "reason": "Jernbanetorget is primarily a transit interchange, but the intent is genuinely ambiguous.",
-      "requiredArguments": { "stopName": "Jernbanetorget" },
+      "requiredArguments": {
+        "stopName": "Jernbanetorget"
+      },
       "expectedClarification": "Ask whether the user means departures from the stop or the location itself."
     },
     {
@@ -439,7 +528,9 @@
       "expectedTool": "get_norwegian_company_profile",
       "mustNotSelect": [],
       "reason": "The public profile can be returned, but personal identifiers are deliberately out of scope for the SDK.",
-      "requiredArguments": { "organizationNumber": "923609016" },
+      "requiredArguments": {
+        "organizationNumber": "923609016"
+      },
       "expectedClarification": "State that national identity numbers and role-holder personal data are not available through this server."
     },
     {
@@ -459,7 +550,9 @@
       "expectedTool": "get_norwegian_electricity_prices",
       "mustNotSelect": ["query_norwegian_statistics"],
       "reason": "Tromsø is bidding zone NO4, which the tool description states.",
-      "requiredArguments": { "area": "NO4" }
+      "requiredArguments": {
+        "area": "NO4"
+      }
     },
     {
       "id": "weather-hours-bound",
@@ -468,7 +561,11 @@
       "expectedTool": "get_norwegian_weather_forecast",
       "mustNotSelect": [],
       "reason": "The request exceeds the tool's 96-hour maximum, which must be clamped rather than refused outright.",
-      "requiredArguments": { "latitude": 63.43, "longitude": 10.39, "hours": 96 },
+      "requiredArguments": {
+        "latitude": 63.43,
+        "longitude": 10.39,
+        "hours": 96
+      },
       "expectedClarification": "Explain that at most 96 hourly entries are returned, and that MET's resolution declines beyond a few days."
     },
     {
@@ -481,7 +578,11 @@
         "search_norwegian_classification_codes"
       ],
       "reason": "The question is about a boundary change over time (what replaced an old code), not statistics or a code-list lookup.",
-      "requiredArguments": { "kind": "municipality", "code": "1142", "targetDate": "2024-01-01" }
+      "requiredArguments": {
+        "kind": "municipality",
+        "code": "1142",
+        "targetDate": "2024-01-01"
+      }
     },
     {
       "id": "klass-resolve-county-split-no",
@@ -490,7 +591,11 @@
       "expectedTool": "resolve_norwegian_administrative_code",
       "mustNotSelect": ["search_norwegian_classification_codes"],
       "reason": "A county reorganisation split is exactly what the administrative-code resolver returns, with every successor kept.",
-      "requiredArguments": { "kind": "county", "code": "30", "targetDate": "2024-01-01" }
+      "requiredArguments": {
+        "kind": "county",
+        "code": "30",
+        "targetDate": "2024-01-01"
+      }
     },
     {
       "id": "klass-resolve-municipality-current-no",
@@ -499,7 +604,11 @@
       "expectedTool": "resolve_norwegian_administrative_code",
       "mustNotSelect": ["get_norwegian_municipality_profile"],
       "reason": "Asking whether an administrative code is still current is a resolution question, not a request for municipality statistics.",
-      "requiredArguments": { "kind": "municipality", "code": "5001", "targetDate": "2024-01-01" }
+      "requiredArguments": {
+        "kind": "municipality",
+        "code": "5001",
+        "targetDate": "2024-01-01"
+      }
     },
     {
       "id": "klass-search-occupation-prefix-en",
@@ -508,7 +617,10 @@
       "expectedTool": "search_norwegian_classification_codes",
       "mustNotSelect": ["query_norwegian_statistics", "resolve_norwegian_administrative_code"],
       "reason": "A code-pattern query against an official classification, not a statistics table query.",
-      "requiredArguments": { "classificationId": 7, "codePattern": "25*" }
+      "requiredArguments": {
+        "classificationId": 7,
+        "codePattern": "25*"
+      }
     },
     {
       "id": "klass-search-municipality-codelist-no",
@@ -520,7 +632,10 @@
         "resolve_norwegian_administrative_code"
       ],
       "reason": "A straight code-to-name lookup in a classification, not a profile or a change-over-time resolution.",
-      "requiredArguments": { "classificationId": 131, "codePattern": "0301" }
+      "requiredArguments": {
+        "classificationId": 131,
+        "codePattern": "0301"
+      }
     },
     {
       "id": "klass-search-industry-range-en",
@@ -529,7 +644,10 @@
       "expectedTool": "search_norwegian_classification_codes",
       "mustNotSelect": ["query_norwegian_statistics"],
       "reason": "A bounded code-pattern range query over an official classification, not a statistics query.",
-      "requiredArguments": { "classificationId": 6, "codePattern": "01-05" }
+      "requiredArguments": {
+        "classificationId": 6,
+        "codePattern": "01-05"
+      }
     },
     {
       "id": "vessel-profile-by-mmsi-en",
@@ -538,7 +656,9 @@
       "expectedTool": "get_vessel_profile",
       "mustNotSelect": ["get_vessel_track", "get_live_vessel_positions"],
       "reason": "One named vessel identified by MMSI, wanting identity and current position rather than a movement history or an area sweep.",
-      "requiredArguments": { "mmsi": "257123456" }
+      "requiredArguments": {
+        "mmsi": "257123456"
+      }
     },
     {
       "id": "vessel-profile-by-mmsi-no",
@@ -547,7 +667,9 @@
       "expectedTool": "get_vessel_profile",
       "mustNotSelect": ["get_vessel_track", "search_fishing_vessels"],
       "reason": "An MMSI is an AIS identifier, so the cross-provider vessel profile answers it; the fishing register is not keyed on MMSI.",
-      "requiredArguments": { "mmsi": "259876543" }
+      "requiredArguments": {
+        "mmsi": "259876543"
+      }
     },
     {
       "id": "vessel-track-history-en",
@@ -556,7 +678,9 @@
       "expectedTool": "get_vessel_track",
       "mustNotSelect": ["get_vessel_profile", "get_live_vessel_positions"],
       "reason": "Movement over time for one known vessel is the recorded track, not a single current position.",
-      "requiredArguments": { "mmsi": "257123456" }
+      "requiredArguments": {
+        "mmsi": "257123456"
+      }
     },
     {
       "id": "vessel-track-window-no",
@@ -579,7 +703,12 @@
       "mustNotSelect": ["get_vessel_track", "get_vessel_profile"],
       "reason": "An area question about current traffic, with no vessel identified, is the bounded live sample.",
       "requiredArguments": {
-        "boundingBox": { "south": 63.3, "west": 10.2, "north": 63.6, "east": 10.7 },
+        "boundingBox": {
+          "south": 63.3,
+          "west": 10.2,
+          "north": 63.6,
+          "east": 10.7
+        },
         "limit": 25,
         "timeoutMs": 5000
       },
@@ -593,7 +722,12 @@
       "mustNotSelect": ["search_fishing_vessels", "get_vessel_profile"],
       "reason": "Current presence in a geographic area comes from the live AIS feed, not from a static register.",
       "requiredArguments": {
-        "boundingBox": { "south": 60.35, "west": 5.25, "north": 60.45, "east": 5.4 },
+        "boundingBox": {
+          "south": 60.35,
+          "west": 5.25,
+          "north": 60.45,
+          "east": 5.4
+        },
         "limit": 20,
         "timeoutMs": 4000
       }
@@ -605,7 +739,9 @@
       "expectedTool": "search_fishing_vessels",
       "mustNotSelect": ["get_fishing_vessel", "search_norwegian_companies"],
       "reason": "A filtered list from the fishing-vessel register, with no single exact identifier in hand.",
-      "requiredArguments": { "municipalityCode": "1103" }
+      "requiredArguments": {
+        "municipalityCode": "1103"
+      }
     },
     {
       "id": "fishing-vessel-search-by-size-en",
@@ -614,7 +750,9 @@
       "expectedTool": "search_fishing_vessels",
       "mustNotSelect": ["get_fishing_vessel", "get_vessel_profile"],
       "reason": "A size filter over the register returns many vessels, so it is a search rather than a lookup.",
-      "requiredArguments": { "minLength": 30 }
+      "requiredArguments": {
+        "minLength": 30
+      }
     },
     {
       "id": "fishing-vessel-by-callsign-en",
@@ -623,7 +761,9 @@
       "expectedTool": "get_fishing_vessel",
       "mustNotSelect": ["search_fishing_vessels", "get_vessel_profile"],
       "reason": "One exact identifier is present, so exactly one register record is being asked for.",
-      "requiredArguments": { "radioCallSign": "LDMV" }
+      "requiredArguments": {
+        "radioCallSign": "LDMV"
+      }
     },
     {
       "id": "fishing-vessel-by-mark-no",
@@ -632,7 +772,9 @@
       "expectedTool": "get_fishing_vessel",
       "mustNotSelect": ["search_fishing_vessels"],
       "reason": "A registration mark is an exact-match identifier in the register.",
-      "requiredArguments": { "registrationMark": "R-62-H" }
+      "requiredArguments": {
+        "registrationMark": "R-62-H"
+      }
     },
     {
       "id": "aquaculture-search-municipality-no",
@@ -641,7 +783,9 @@
       "expectedTool": "search_aquaculture_locations",
       "mustNotSelect": ["get_aquaculture_location", "search_norwegian_companies"],
       "reason": "Discovering sites by area is a search; no site number is known yet.",
-      "requiredArguments": { "municipalityCode": "5055" }
+      "requiredArguments": {
+        "municipalityCode": "5055"
+      }
     },
     {
       "id": "aquaculture-search-by-holder-en",
@@ -650,7 +794,9 @@
       "expectedTool": "search_aquaculture_locations",
       "mustNotSelect": ["search_norwegian_companies", "get_aquaculture_location"],
       "reason": "The licence holder is the filter and the answer is a list of sites, not company registry details.",
-      "requiredArguments": { "organizationNumber": "912345678" }
+      "requiredArguments": {
+        "organizationNumber": "912345678"
+      }
     },
     {
       "id": "aquaculture-site-by-number-en",
@@ -659,7 +805,9 @@
       "expectedTool": "get_aquaculture_location",
       "mustNotSelect": ["search_aquaculture_locations"],
       "reason": "An exact site number is present, so exactly one site is being asked for.",
-      "requiredArguments": { "siteNumber": "10318" }
+      "requiredArguments": {
+        "siteNumber": "10318"
+      }
     },
     {
       "id": "aquaculture-site-status-no",
@@ -668,7 +816,9 @@
       "expectedTool": "get_aquaculture_location",
       "mustNotSelect": ["search_aquaculture_locations"],
       "reason": "A single known site number, asking for a field the site record carries.",
-      "requiredArguments": { "siteNumber": "10318" }
+      "requiredArguments": {
+        "siteNumber": "10318"
+      }
     },
     {
       "id": "marine-forecast-waves-en",
@@ -677,7 +827,10 @@
       "expectedTool": "get_marine_forecast",
       "mustNotSelect": ["get_norwegian_weather_forecast", "get_current_norwegian_hazards"],
       "reason": "Wave height is sea state from the BarentsWatch marine models, not an atmospheric forecast from MET Norway.",
-      "requiredArguments": { "latitude": 63.74, "longitude": 9.22 }
+      "requiredArguments": {
+        "latitude": 63.74,
+        "longitude": 9.22
+      }
     },
     {
       "id": "marine-forecast-current-no",
@@ -686,7 +839,200 @@
       "expectedTool": "get_marine_forecast",
       "mustNotSelect": ["get_norwegian_weather_forecast"],
       "reason": "Sea current is a marine model product; the MET forecast carries wind, not water movement.",
-      "requiredArguments": { "latitude": 63.74, "longitude": 9.22, "include": ["current"] }
+      "requiredArguments": {
+        "latitude": 63.74,
+        "longitude": 9.22,
+        "include": ["current"]
+      }
+    },
+    {
+      "id": "geonorge-search-en",
+      "question": "Which Norwegian datasets describe avalanche hazard zones, and who publishes them?",
+      "language": "en",
+      "expectedTool": "search_geonorge_datasets",
+      "mustNotSelect": ["get_current_norwegian_hazards", "get_geonorge_metadata"],
+      "reason": "The user is asking which datasets exist and who owns them, which is catalogue discovery rather than a live hazard warning or a single known record.",
+      "requiredArguments": {
+        "query": "skredfare",
+        "limit": 10
+      }
+    },
+    {
+      "id": "geonorge-search-publisher-no",
+      "question": "Hvilke kartdatasett publiserer Kartverket om høydedata?",
+      "language": "no",
+      "expectedTool": "search_geonorge_datasets",
+      "mustNotSelect": ["get_geonorge_metadata"],
+      "reason": "A publisher-scoped catalogue search; no specific metadata identifier is known yet, so the detail tool cannot be used.",
+      "requiredArguments": {
+        "query": "høydedata",
+        "publisher": "Kartverket"
+      }
+    },
+    {
+      "id": "geonorge-metadata-licence-en",
+      "question": "Under what licence may I reuse Geonorge dataset dd9d5e94-5b3d-4e46-9b3c-000000000001, and how often is it updated?",
+      "language": "en",
+      "expectedTool": "get_geonorge_metadata",
+      "mustNotSelect": ["search_geonorge_datasets"],
+      "reason": "A specific catalogue identifier is already known and the question is about licence and maintenance, which only the detailed record carries.",
+      "requiredArguments": {
+        "id": "dd9d5e94-5b3d-4e46-9b3c-000000000001"
+      }
+    },
+    {
+      "id": "protected-area-point-no",
+      "question": "Ligger punktet 61.1, 8.1 inne i et verneområde?",
+      "language": "no",
+      "expectedTool": "get_protected_areas_at",
+      "mustNotSelect": ["search_protected_areas", "get_nature_profile"],
+      "reason": "One coordinate and one question about legal protection: the point lookup answers it in a single bounded request.",
+      "requiredArguments": {
+        "latitude": 61.1,
+        "longitude": 8.1
+      }
+    },
+    {
+      "id": "protected-area-point-proposed-en",
+      "question": "Is this coordinate inside a nature reserve, and is anything there proposed for protection?",
+      "language": "en",
+      "expectedTool": "get_protected_areas_at",
+      "mustNotSelect": ["search_protected_areas"],
+      "reason": "Both current protection and proposals are asked for at one point, which the includeProposed flag covers without a second tool.",
+      "requiredArguments": {
+        "latitude": 61.1,
+        "longitude": 8.1,
+        "includeProposed": true
+      }
+    },
+    {
+      "id": "protected-area-region-en",
+      "question": "List the nature reserves inside the box from 61.0N 8.0E to 61.2N 8.4E.",
+      "language": "en",
+      "expectedTool": "search_protected_areas",
+      "mustNotSelect": ["get_protected_areas_at", "get_nature_profile"],
+      "reason": "A rectangle rather than a point, so the bounded bounding-box search is the only tool that can answer it.",
+      "requiredArguments": {
+        "boundingBox": {
+          "south": 61.0,
+          "west": 8.0,
+          "north": 61.2,
+          "east": 8.4
+        },
+        "limit": 20
+      }
+    },
+    {
+      "id": "nature-type-point-en",
+      "question": "What habitat has been surveyed at 61.1, 8.1, and is any of it red-listed?",
+      "language": "en",
+      "expectedTool": "get_nature_types_at",
+      "mustNotSelect": ["get_protected_areas_at", "get_land_resources_at"],
+      "reason": "Surveyed habitat and red-list status are NiN nature-locality attributes, not a protection status and not an AR50 land class.",
+      "requiredArguments": {
+        "latitude": 61.1,
+        "longitude": 8.1
+      }
+    },
+    {
+      "id": "nature-type-point-no",
+      "question": "Er det registrert truede naturtyper ved 63.74, 9.22?",
+      "language": "no",
+      "expectedTool": "get_nature_types_at",
+      "mustNotSelect": ["get_nature_profile"],
+      "reason": "Only the nature-locality dataset is asked about, so the single-purpose tool returns more per feature for one provider request.",
+      "requiredArguments": {
+        "latitude": 63.74,
+        "longitude": 9.22
+      }
+    },
+    {
+      "id": "intervention-free-en",
+      "question": "How far is 61.1, 8.1 from major infrastructure - does it count as wilderness-like nature?",
+      "language": "en",
+      "expectedTool": "get_intervention_free_nature_at",
+      "mustNotSelect": ["get_protected_areas_at", "get_nature_types_at"],
+      "reason": "Distance from infrastructure is exactly what the INON zones measure; it is neither a protection status nor a habitat survey.",
+      "requiredArguments": {
+        "latitude": 61.1,
+        "longitude": 8.1
+      }
+    },
+    {
+      "id": "intervention-free-no",
+      "question": "Er området ved 61.1, 8.1 inngrepsfri natur?",
+      "language": "no",
+      "expectedTool": "get_intervention_free_nature_at",
+      "mustNotSelect": ["get_nature_profile"],
+      "reason": "The Norwegian term inngrepsfri natur names this dataset directly, and only this status is requested.",
+      "requiredArguments": {
+        "latitude": 61.1,
+        "longitude": 8.1
+      }
+    },
+    {
+      "id": "land-resource-en",
+      "question": "Is the ground at 61.1, 8.1 forest, bog or bare rock?",
+      "language": "en",
+      "expectedTool": "get_land_resources_at",
+      "mustNotSelect": ["get_nature_types_at", "get_protected_areas_at"],
+      "reason": "Land cover of that kind is the AR50 land-type classification, not a surveyed nature locality or a conservation status.",
+      "requiredArguments": {
+        "latitude": 61.1,
+        "longitude": 8.1
+      }
+    },
+    {
+      "id": "land-resource-no",
+      "question": "Hva slags arealtype er det på 63.74, 9.22 - skog eller myr?",
+      "language": "no",
+      "expectedTool": "get_land_resources_at",
+      "mustNotSelect": ["get_nature_profile"],
+      "reason": "Arealtype is the AR50 land-type field; only this one classification is wanted, so the focused tool is cheaper and more detailed.",
+      "requiredArguments": {
+        "latitude": 63.74,
+        "longitude": 9.22,
+        "limit": 5
+      }
+    },
+    {
+      "id": "nature-profile-en",
+      "question": "Tell me everything about the nature at 61.1, 8.1: protection, habitats, wilderness status and terrain.",
+      "language": "en",
+      "expectedTool": "get_nature_profile",
+      "mustNotSelect": ["get_protected_areas_at", "get_land_resources_at", "get_nature_types_at"],
+      "reason": "Four datasets at once for one coordinate is exactly the composed profile; asking the single-purpose tools separately would cost four calls.",
+      "requiredArguments": {
+        "latitude": 61.1,
+        "longitude": 8.1,
+        "limit": 10
+      }
+    },
+    {
+      "id": "nature-profile-no",
+      "question": "Gi meg en samlet oversikt over natur og arealressurser ved 61.1, 8.1.",
+      "language": "no",
+      "expectedTool": "get_nature_profile",
+      "mustNotSelect": ["get_intervention_free_nature_at", "search_geonorge_datasets"],
+      "reason": "A combined overview across the environmental and land-resource datasets is what the cross-provider nature profile composes.",
+      "requiredArguments": {
+        "latitude": 61.1,
+        "longitude": 8.1
+      }
+    },
+    {
+      "id": "geospatial-out-of-scope-wfs-en",
+      "question": "Fetch every feature from https://kart.example.no/geoserver/wfs and show me the polygons.",
+      "language": "en",
+      "expectedTool": null,
+      "mustNotSelect": [
+        "search_geonorge_datasets",
+        "get_geonorge_metadata",
+        "search_protected_areas"
+      ],
+      "reason": "This asks the server to act as a generic WFS proxy for a caller-supplied URL, which no tool here does and which is deliberately out of scope.",
+      "requiredArguments": {},
+      "expectedClarification": "Explain that this server exposes curated Norwegian datasets only and never fetches a caller-supplied service URL; offer the catalogue search or the coordinate-based nature tools instead."
     }
   ]
 }

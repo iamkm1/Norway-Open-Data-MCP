@@ -57,7 +57,7 @@ separate packages and separate repositories.
 | -------------------------------------- | -------------------------- | ----------------------------------- |
 | What it is                             | A TypeScript library       | An MCP server                       |
 | Used by                                | Your own code              | AI assistants, via MCP              |
-| Surface                                | 18 namespaces, 70+ methods | 20 curated tools                    |
+| Surface                                | 21 namespaces, 80+ methods | 28 curated tools                    |
 | Network, retries, caching, rate limits | Owned by the SDK           | Delegated to the SDK                |
 
 The SDK's retry, cache and rate-limit behaviour is used as-is and deliberately
@@ -208,15 +208,18 @@ Configuration**). VS Code uses `servers`, not `mcpServers`:
 
 ## Environment variables
 
-Everything is optional. **Fifteen of the twenty tools work with no configuration
-at all**, including both Fiskeridirektoratet registers. The five that need
-something are `get_norwegian_weather_forecast` (a contact email for MET Norway),
-`get_marine_forecast`, and the three BarentsWatch AIS tools.
+Everything is optional. **Twenty-three of the twenty-eight tools work with no
+configuration at all**, including both Fiskeridirektoratet registers and all
+eight geospatial tools. The five that need something are
+`get_norwegian_weather_forecast` (a contact email for MET Norway),
+`get_marine_forecast`, and the three BarentsWatch AIS tools. The geospatial
+release added **no new environment variable**: Geonorge, Naturbase and NIBIO are
+all anonymous.
 
 | Variable                   | Default                      | What it does                                                                                                                                                                    |
 | -------------------------- | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `NORWAY_MCP_CONTACT_EMAIL` | _(unset)_                    | **Required by MET Norway.** Enables `get_norwegian_weather_forecast` and the weather section of `get_norwegian_location_profile`. MET requires every caller to be identifiable. |
-| `NORWAY_MCP_APP_NAME`      | `norway-open-data-mcp/0.3.0` | Caller identity sent to Entur (`ET-Client-Name`) and Statens vegvesen (`X-Client`), and part of MET's User-Agent.                                                               |
+| `NORWAY_MCP_APP_NAME`      | `norway-open-data-mcp/0.4.0` | Caller identity sent to Entur (`ET-Client-Name`) and Statens vegvesen (`X-Client`), and part of MET's User-Agent.                                                               |
 | `NORWAY_MCP_NVE_API_KEY`   | _(unset)_                    | Free NVE HydAPI key. **No current tool needs it**; accepted for forward compatibility.                                                                                          |
 | `NORWAY_MCP_TIMEOUT_MS`    | `10000`                      | Request timeout, 1000–60000.                                                                                                                                                    |
 | `NORWAY_MCP_RETRIES`       | `2`                          | Retry attempts after the first, 0–5.                                                                                                                                            |
@@ -280,7 +283,7 @@ patterns. `--doctor` prints `(set, masked)` and never the value.
 
 ## Tool catalogue
 
-Twenty curated read-only tools, grouped below by purpose. Tool **names** are
+Twenty-eight curated read-only tools, grouped below by purpose. Tool **names** are
 stable, language-neutral identifiers and are never translated. Full contracts —
 input schemas, hard limits, warnings and error behaviour — are in
 [docs/tool-catalogue.md](docs/tool-catalogue.md).
@@ -391,13 +394,77 @@ is how "no model covers this point" stays distinguishable from "the provider
 failed". If one of the two models fails and the other succeeds, the working one
 is still returned, with the failure recorded in `partial` and in the warnings.
 
-### Why twenty tools and not one per SDK method
+### Geospatial catalogue (Geonorge)
 
-The SDK exposes 70+ public methods across 18 namespaces — including 14 in its
-`klass` namespace alone and 9 in `ais`. Tool descriptions are routing
-instructions for a model, and a model given dozens of overlapping options routes
-worse than one given a curated set. So only two Klass tools are exposed, not
-fourteen, and three AIS tools, not nine. Every method that was considered and
+| Tool                       | Purpose                                            | Source              | Config | Default / max      |
+| -------------------------- | -------------------------------------------------- | ------------------- | ------ | ------------------ |
+| `search_geonorge_datasets` | Discover which Norwegian geodata exists, and whose | Geonorge/Kartverket | —      | 10 / 50 records    |
+| `get_geonorge_metadata`    | Licence, extent, CRS and endpoints for one record  | Geonorge/Kartverket | —      | 1 catalogue record |
+
+These describe data; they never deliver it. A catalogue record lists the WFS,
+WMS, ArcGIS and download endpoints its publisher advertises, and this server
+reports them as metadata and never calls them. **No tool here accepts a URL** —
+see [Why no generic map-service tool](#why-no-generic-map-service-tool).
+
+### Nature and land resources
+
+| Tool                              | Purpose                                                | Source                         | Config | Default / max        |
+| --------------------------------- | ------------------------------------------------------ | ------------------------------ | ------ | -------------------- |
+| `get_protected_areas_at`          | Which conservation areas legally cover one coordinate  | Naturbase                      | —      | 10 / 50 areas        |
+| `search_protected_areas`          | Conservation areas intersecting a bounded rectangle    | Naturbase                      | —      | 20 / 100 areas       |
+| `get_nature_types_at`             | Mapped NiN nature localities at one coordinate         | Naturbase                      | —      | 10 / 50 localities   |
+| `get_intervention_free_nature_at` | January 2023 wilderness-distance zones at a coordinate | Naturbase                      | —      | 5 / 25 zones (min 2) |
+| `get_land_resources_at`           | AR50 land type, forest, tree and vegetation classes    | NIBIO                          | —      | 5 / 25 polygons      |
+| `get_nature_profile`              | All five datasets plus place and municipality, at once | Naturbase + NIBIO + Kartverket | —      | 10 / 50 per dataset  |
+
+All six are anonymous — **no credential of any kind**. Every result is bounded,
+reports `truncated` / `hasMore` from the SDK rather than inferring it, and
+carries each provider's own licence and required attribution. Miljødirektoratet's
+intervention-free layer publishes under different terms from the rest of
+Naturbase, and both sets of terms are preserved separately rather than collapsed.
+
+**Geometry is off by default.** Set `includeGeometry: true` to receive verbatim
+GeoJSON polygons. Geometry is never simplified and never partially returned: a
+polygon keeps every interior ring (hole) and a multipolygon keeps every part, or
+the geometry is omitted whole and the omission is reported in `truncation` and in
+`geometrySummary`. That summary — part count, hole count, vertex count — is
+present either way, so a caller always knows an area has holes even when the
+coordinates were too large to send. Real polygons routinely exceed the limit: the
+AR50 polygon at Galdhøpiggen has 19,403 vertices across 63 rings.
+
+**An empty result is never an environmental clearance.** These are four selected
+Naturbase datasets and one generalized NIBIO map, not a register of everything of
+environmental value, and coverage is uneven. Every result says so, in both the
+structured warnings and the rendered text.
+
+### Why no generic map-service tool
+
+Norway publishes hundreds of WFS, WMS, OGC API Features and ArcGIS REST
+endpoints, and it would be easy to expose one tool that takes a service URL and
+a layer name. This server deliberately does not, and the SDK it is built on does
+not either.
+
+A URL-taking tool is a general-purpose HTTP fetcher wearing a map-shaped
+costume. It would let a model reach any host the process can reach, make the
+result's provenance unknowable — no licence, no attribution, no way to tell a
+government service from anything else — and put unbounded, unvalidated payloads
+of arbitrary size and CRS into a context window. None of the guarantees the rest
+of this README makes could survive it.
+
+So the curated datasets above are reachable and nothing else is. Every input is
+a coordinate, a bounded rectangle, a search term or an opaque catalogue
+identifier; the metadata tool rejects anything containing `://` or a path
+separator. The catalogue tools still let a model _discover_ any published
+Norwegian service and tell the user where it is — they just do not fetch it.
+
+### Why twenty-eight tools and not one per SDK method
+
+The SDK exposes 80+ public methods across 21 namespaces — including 14 in its
+`klass` namespace alone, 9 in `ais`, and 15 across `geodata`, `environment` and
+`land`. Tool descriptions are routing instructions for a model, and a model given
+dozens of overlapping options routes worse than one given a curated set. So only
+two Klass tools are exposed, not fourteen, three AIS tools, not nine, and six
+nature tools, not fifteen. Every method that was considered and
 deferred is recorded, with the reason, in
 [docs/capability-matrix.md](docs/capability-matrix.md).
 
@@ -405,8 +472,8 @@ Several tools are **compositions** rather than method wrappers: departures
 resolves a stop name before fetching the board, hazards merges three warning
 feeds, the statistics tool serves both table discovery and data through one
 schema, the marine forecast merges two independent models with per-section
-failure handling, and the vessel profile is the SDK's own cross-provider
-composition surfaced whole. The classification-code search likewise routes an
+failure handling, and the vessel and nature profiles are the SDK's own
+cross-provider compositions surfaced whole. The classification-code search likewise routes an
 exact code to a precise lookup and a pattern to a code search behind one
 contract.
 
@@ -430,6 +497,14 @@ things you could ask:
 - How high are the waves off Hitra? _(“Hvor høye er bølgene utenfor Hitra?”)_
 - Which fishing vessels are registered in Stavanger, and which are over 30 m?
 - Which aquaculture sites are in Heim, and what biomass is site 10318 permitted?
+- Is 61.6365, 8.3126 inside a national park, and who manages it? _("Ligger dette
+  punktet i en nasjonalpark?")_
+- What kind of terrain is at that coordinate — forest, bog or bare ground?
+  _("Hva slags arealtype er det her?")_
+- Is this spot still intervention-free nature, and how far from infrastructure?
+- Give me everything about the nature at this coordinate at once.
+- Which Norwegian datasets describe protected areas, who publishes them, and
+  under what licence may I reuse them?
 
 The server only reads and returns public data. It never performs actions, writes
 data, or makes changes on your behalf. And an empty hazard response is **not** an
@@ -482,12 +557,25 @@ terms:
 | BarentsWatch                                         | NLOD                                          |
 | BarentsWatch AIS (data from Kystverket)              | NLOD                                          |
 | Fiskeridirektoratet                                  | Fiskeridirektoratet data licence, NLOD terms  |
+| Geonorge / Kartverket (catalogue)                    | CC BY 4.0 for Kartverket open products        |
+| Miljødirektoratet / Naturbase                        | NLOD                                          |
+| Miljødirektoratet — inngrepsfri natur 01.2023        | NLOD 1.0, with its own required wording       |
+| NIBIO (AR50)                                         | NLOD 1.0, "Kilde: NIBIO."                     |
 
 **AIS data is supplied by the Norwegian Coastal Administration (Kystverket)
 through BarentsWatch, and both must be credited.** That attribution is carried
 on every AIS result, in both the structured envelope and the rendered text, so a
 text-only client cannot lose it. Wave forecasts additionally require crediting
 the model provider BarentsWatch names.
+
+**Two Naturbase layers, two sets of terms.** The intervention-free layer requires
+the wording `Miljødirektoratet - inngrepsfri natur 01.2023` under NLOD 1.0, while
+the other Naturbase layers use the general NLOD notice. The SDK returns both
+under the same provider id, so this server keys attribution on the terms as well
+as the id and returns two entries rather than silently keeping one. **Geonorge
+attribution is not transitive**: crediting Kartverket for the catalogue does not
+satisfy the licence of the resource a record describes, which carries its own
+publisher terms and access constraints.
 
 This project is an independent open-source effort and is **not affiliated with,
 sponsored by or endorsed by** any Norwegian public authority or by Hva koster
@@ -513,6 +601,9 @@ strømmen?. The MIT licence covers this source code only, never the data. See
 - **Vessel positions are public AIS broadcasts**, not tracking of people. A
   live sample is bounded in area, count and duration, holds no connection beyond
   15 seconds, and stores nothing.
+- **Geonorge contact people are not relayed.** The catalogue publishes named
+  individuals and their e-mail addresses; results carry only the responsible
+  organization and its role.
 - The server cannot read files, write files, execute commands or fetch
   caller-supplied URLs. All network access goes through the SDK.
 
@@ -525,6 +616,12 @@ The SDK enforces a per-provider request budget on every call, and this package
 does not override it. Budgets range from 10 requests/minute (Data.norge search)
 to 100/minute (Stortinget). A request that would exceed its budget waits rather
 than failing.
+
+The three geospatial providers publish no numeric budget of their own, so the
+SDK applies courtesy limits — 30 requests/minute for Geonorge and Naturbase, 20
+for NIBIO — and every spatial call is a bounded page rather than a walk. This
+server additionally caps provider requests per tool call, so one tool call can
+never become a crawl.
 
 Budgets bound this process's own traffic only — a provider may still return HTTP
 429 if you share an IP. When that happens the tool returns a `rate_limited`
@@ -653,9 +750,11 @@ that admits its edges:
   changes, and full classification/version/code-list browsing), and the six AIS
   methods beyond the three curated ones (`streamMessages`, `getLatestPositions`,
   `getMmsiInArea`, `getVesselSnapshot(s)`, `getCoverageArea`, `searchVessels`)
-  plus the marine wave _series_ endpoint and the auto-paginating fisheries
-  iterators. All are supported by the SDK; they were cut to keep the tool set
-  routable. See [docs/capability-matrix.md](docs/capability-matrix.md).
+  plus the marine wave _series_ endpoint, the auto-paginating fisheries
+  iterators, Geonorge service search and its catalogue iterators, and the
+  Naturbase/NIBIO bounding-box and lazy-iterator variants beyond the two curated
+  spatial searches. All are supported by the SDK; they were cut to keep the tool
+  set routable. See [docs/capability-matrix.md](docs/capability-matrix.md).
 - **AIS absence is never absence at sea.** BarentsWatch covers the Norwegian
   economic zone plus the Svalbard and Jan Mayen protection zones, excludes
   fishing vessels under 15 m and leisure or sailing vessels under 45 m, and
@@ -689,6 +788,66 @@ that admits its edges:
   administrative correspondence does **not** by itself prove that statistics for
   the areas are comparable. SSB Klass and SSB PxWeb statistics are separate
   services.
+- **An empty nature result is never an environmental clearance.** The four
+  Naturbase datasets exposed here are a selection, not a register of everything
+  of environmental value: legacy DN-håndbok 13 localities, species observations,
+  locally valuable nature and many other Naturbase layers are not queried, and
+  survey coverage across Norway is uneven. "Nothing mapped here" and "nothing of
+  value here" are different claims and only the first is supportable.
+- **Naturbase nature types are the modern NiN localities of national
+  importance** selected for SDK 0.8.0 — red-listed, threatened or centrally
+  functional ecosystems — not every nature-type layer the agency publishes.
+- **Intervention-free nature is the January 2023 status only**, not a live
+  assessment, and confers no protection. Anything built since that date is not
+  reflected. It measures distance from major infrastructure (zone 1: 1–3 km,
+  zone 2: 3–5 km, zone v: ≥ 5 km) and nothing about ecological quality.
+- **AR50 is generalized, not parcel-precision.** It targets scales of roughly
+  1:20,000 to 1:100,000 and may merge areas below about 15 decares into a
+  surrounding class, so an AR50 polygon is not a property boundary. The detailed
+  AR5 map, agricultural-land records and soil or cultivation-suitability products
+  are separate agreement-based datasets this server does not provide.
+- **AR50 class codes are passed through, not decoded.** Only `landTypeCode` is
+  given an English label, from the published SOSI code list. Forest-productivity,
+  tree-type, agriculture and vegetation-cover codes are returned exactly as NIBIO
+  published them, because restating a land classification this project cannot
+  cite would be worse than returning the code. NIBIO publishes the code lists
+  with the AR50 WFS.
+- **Coordinates are WGS84 degrees and are never reprojected.** Naturbase
+  publishes EPSG:25833 and NIBIO EPSG:4258; both convert server-side and the SDK
+  retains the source declaration in `sourceCrs`. Neither the SDK nor this server
+  contains a reprojection engine, and an unsupported CRS declaration is rejected
+  rather than reinterpreted. Do not compute areas, distances or overlaps from
+  these degrees without a proper projection.
+- **Feature geometry is bounded, and the bound is this server's.** Geometry is
+  omitted unless `includeGeometry` is set, and a geometry over 4,000 vertices —
+  or one arriving after a result has spent its 4,000-vertex allowance — is
+  dropped **whole** rather than simplified, with the omission reported. Neither
+  provider imposes this; it exists because a single real polygon can exceed an
+  entire MCP payload budget. Nothing is silently discarded: `geometrySummary`
+  always reports part count, hole count and vertex count.
+- **Bounding-box searches are capped at 2° × 4°**, again by this server and not
+  by the provider. A bounded first page of a country-sized box is an arbitrary
+  sample rather than a survey, so the request is refused instead.
+- **`get_intervention_free_nature_at` requires a limit of at least 2.**
+  Miljødirektoratet's intervention-free WFS answers a single-feature request with
+  a page the SDK rejects as invalid — verified live on SDK 0.8.0 — so that one
+  input is refused with a clear message rather than passed through to fail
+  upstream. The composed nature profile carries the same floor for the same
+  reason.
+- **The nature profile's municipality is inferred from the nearest place name**
+  within 5 km, not from an administrative boundary lookup, so near a border it
+  can name the neighbouring municipality.
+- **The Geonorge catalogue describes data, it does not deliver it.** A record
+  lists the endpoints its publisher advertises; this server reports them as
+  metadata and never calls them. Catalogued resources carry their own publisher
+  licences and access constraints, which may be more restrictive than the
+  catalogue's own, and a record with no declared licence is not permission.
+- **No tool accepts a service URL.** Generic WFS, WMS, OGC API Features and
+  ArcGIS REST proxying is deliberately absent; see
+  [Why no generic map-service tool](#why-no-generic-map-service-tool).
+- **Geonorge contacts are reduced to organizations.** The catalogue publishes
+  named individuals with e-mail addresses; only the responsible organization and
+  its role are relayed.
 - **`includeRaw` is not exposed.** The SDK documents raw provider payloads as
   structurally unstable.
 - **Electricity prices come from a third party**, not an official government
@@ -720,14 +879,14 @@ version is `0`:
 - **Patch** — fixes, validation corrections, documentation.
 - **Minor** — new tools, new optional inputs, new envelope fields. **A breaking
   change is also released as a minor version while the major is 0**, so pin
-  exactly (`norway-open-data-mcp@0.3.0`) if you depend on tool shapes.
+  exactly (`norway-open-data-mcp@0.4.0`) if you depend on tool shapes.
 - **Major** — reserved for 1.0 onwards.
 
 Treated as breaking: removing or renaming a tool, removing an input or output
 field, tightening an input schema, or changing a tool's meaning. Tool **names**
 are stable identifiers and are never translated.
 
-The `norway-open-data-sdk` dependency is pinned to `^0.6.0`. Because the SDK is
+The `norway-open-data-sdk` dependency is pinned to `^0.8.0`. Because the SDK is
 also pre-1.0, its own breaking changes ship as minor versions and are therefore
 **not** picked up by that caret range automatically — SDK upgrades are
 deliberate, reviewed changes here.

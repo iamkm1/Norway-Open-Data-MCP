@@ -1,10 +1,10 @@
 # SDK capability matrix
 
-Source of truth: the installed declarations of `norway-open-data-sdk@0.7.0`
+Source of truth: the installed declarations of `norway-open-data-sdk@0.8.0`
 (`dist/index.d.ts`), its `PROVIDERS.md`, and the runtime `providerDescriptors`
 registry. Nothing in this document is inferred from the project brief.
 
-The SDK exposes **18 facade namespaces**. This matrix records every public
+The SDK exposes **21 facade namespaces**. This matrix records every public
 method on them and whether it is appropriate as an MCP tool.
 
 ## Provider registry (runtime-verified)
@@ -21,9 +21,12 @@ Read from `providerDescriptors` at runtime on 2026-07-23.
 | `fhi`                | FHI                     | open                    | —                                 | 30/min (courtesy)         |
 | `fiskeridir-aqua`    | Fiskeridir. aquaculture | open                    | —                                 | 60/min (courtesy)         |
 | `fiskeridir-vessels` | Fiskeridir. vessels     | open                    | —                                 | 60/min (courtesy)         |
+| `geonorge`           | Geonorge / Kartverket   | open                    | —                                 | 30/min (courtesy)         |
 | `hvakosterstrommen`  | Hva koster strømmen?    | open                    | —                                 | 30/min (courtesy)         |
 | `kartverket`         | Kartverket              | open                    | —                                 | 60/min (courtesy)         |
 | `met`                | MET Norway              | identification-required | `applicationName`, `contactEmail` | 60/min (courtesy)         |
+| `naturbase`          | Miljødirektoratet       | open                    | —                                 | 30/min (courtesy)         |
+| `nibio`              | NIBIO                   | open                    | —                                 | 20/min (courtesy)         |
 | `norges-bank`        | Norges Bank             | open                    | —                                 | 60/min (courtesy)         |
 | `nve`                | NVE                     | registration-required   | `apiKey` (HydAPI methods only)    | 30/min (courtesy)         |
 | `ssb`                | Statistics Norway       | open                    | —                                 | 30/min (documented)       |
@@ -33,7 +36,7 @@ Read from `providerDescriptors` at runtime on 2026-07-23.
 
 Two consequences drive the configuration design:
 
-- `applicationName` is satisfiable by this package itself (`norway-open-data-mcp/0.3.0`),
+- `applicationName` is satisfiable by this package itself (`norway-open-data-mcp/0.4.0`),
   so Entur and Statens vegvesen work with **zero user setup**.
 - `contactEmail` cannot be invented. MET Norway is therefore the one provider that
   is genuinely user-configured, and it is the reference case for the
@@ -49,6 +52,62 @@ Two consequences drive the configuration design:
 - **Fiskeridirektoratet is two open descriptors**, one per register, and needs no
   credentials at all — which is why four of the eight maritime tools work with
   zero configuration.
+
+## Geospatial namespaces (0.8.0)
+
+All three are **open and anonymous**: the geospatial release added no environment
+variable and no credential of any kind.
+
+### `geodata` — `GeonorgeClient` (geonorge)
+
+| Method                      | Purpose                                         | Cred | Tool?                                                                                                                                   |
+| --------------------------- | ----------------------------------------------- | ---- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `searchDatasets(params)`    | Bounded dataset-metadata search                 | no   | **yes** — `search_geonorge_datasets`                                                                                                    |
+| `getMetadata(id)`           | Normalized record for any catalogue id          | no   | **yes** — `get_geonorge_metadata`                                                                                                       |
+| `getDataset(id)`            | `getMetadata` asserting the record is a dataset | no   | no — the metadata tool already reports `type`; a second tool that differs only by an assertion misroutes                                |
+| `getService(id)`            | `getMetadata` asserting the record is a service | no   | no — same reason                                                                                                                        |
+| `searchServices(params)`    | Bounded service-metadata search                 | no   | no — routing overlap with dataset search; a model asking "what data exists" wants datasets, and a service's metadata is reachable by id |
+| `searchDatasetsAll(params)` | Auto-paginating dataset iterator                | no   | no — unbounded iteration is the opposite of an output budget                                                                            |
+| `searchServicesAll(params)` | Auto-paginating service iterator                | no   | no — same reason                                                                                                                        |
+
+### `environment` — `NaturbaseClient` (naturbase)
+
+| Method                                 | Purpose                                   | Cred | Tool?                                                                                                             |
+| -------------------------------------- | ----------------------------------------- | ---- | ----------------------------------------------------------------------------------------------------------------- |
+| `getProtectedAreasAt(query)`           | Current protected areas at a point        | no   | **yes** — `get_protected_areas_at`                                                                                |
+| `searchProtectedAreas(query)`          | Current protected areas in a bounding box | no   | **yes** — `search_protected_areas`                                                                                |
+| `getProposedProtectedAreasAt(query)`   | Proposed protected areas at a point       | no   | **yes** — `get_protected_areas_at` (`includeProposed`) and `get_nature_profile`                                   |
+| `getNatureTypesAt(query)`              | NiN nature localities at a point          | no   | **yes** — `get_nature_types_at`                                                                                   |
+| `getInterventionFreeAreasAt(query)`    | January 2023 INON zones at a point        | no   | **yes** — `get_intervention_free_nature_at`                                                                       |
+| `searchProposedProtectedAreas(query)`  | Proposed areas in a bounding box          | no   | no — proposals are a follow-up question about a place, not a regional survey; the point path covers it            |
+| `searchNatureTypes(query)`             | NiN localities in a bounding box          | no   | no — a locality-level regional sweep multiplies polygon output for little routing gain                            |
+| `searchInterventionFreeAreas(query)`   | INON zones in a bounding box              | no   | no — INON polygons are among the largest Naturbase publishes; a box query is the worst case for the output budget |
+| `iterateProtectedAreas(query)`         | Lazy bounded page walk                    | no   | no — unbounded by construction; every tool here returns one bounded page                                          |
+| `iterateProposedProtectedAreas(query)` | Lazy bounded page walk                    | no   | no — same reason                                                                                                  |
+| `iterateNatureTypes(query)`            | Lazy bounded page walk                    | no   | no — same reason                                                                                                  |
+| `iterateInterventionFreeAreas(query)`  | Lazy bounded page walk                    | no   | no — same reason                                                                                                  |
+
+Only one bounding-box search is exposed, and it is the protected-area one. That
+is the question people actually ask about a region ("which reserves are in this
+valley?"), and conservation-area polygons are the best-behaved of the four
+layers. The other three answer a _place_, so their point lookups are what a model
+needs.
+
+### `land` — `NibioClient` (nibio)
+
+| Method                        | Purpose                         | Cred | Tool?                                                                                                                                                               |
+| ----------------------------- | ------------------------------- | ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `getLandResourcesAt(query)`   | AR50 classes at a point         | no   | **yes** — `get_land_resources_at`                                                                                                                                   |
+| `searchLandResources(query)`  | AR50 polygons in a bounding box | no   | no — AR50 covers the whole country, so a box always matches; live polygons run to 19,403 vertices, making a regional page an arbitrary slice of an enormous surface |
+| `iterateLandResources(query)` | Lazy bounded page walk          | no   | no — unbounded by construction                                                                                                                                      |
+
+### `profiles.natureAtLocation()` — `ProfileClient` (cross-provider)
+
+Exposed whole as `get_nature_profile`. It composes all five Naturbase/NIBIO
+datasets with the nearest Kartverket place name, runs the six lookups
+independently, and reports per-operation provenance and per-provider failure —
+the same shape this server's envelope already carries. Reimplementing that fan-out
+here would duplicate the SDK's failure handling and lose its omission reasons.
 
 ## Maritime namespaces (0.7.0)
 
@@ -114,6 +173,7 @@ Columns: **Tool?** = exposed as / used by an MCP tool.
 | `company(orgNr)`      | Company + official Kartverket coordinate match     | `string` | no      | brreg + kartverket                | 1 object | **yes** — `get_norwegian_company_profile`      |
 | `address(query)`      | Address + weather + hazards + roads                | `string` | partial | kartverket + met + nve + vegvesen | medium   | **yes** — `get_norwegian_location_profile`     |
 | `municipality(query)` | Population + life expectancy + companies + hazards | `string` | no      | ssb + fhi + brreg + nve           | medium   | **yes** — `get_norwegian_municipality_profile` |
+| `natureAtLocation(p)` | Five nature/land datasets + nearest place          | coords   | no      | naturbase + nibio + kartverket    | medium   | **yes** — `get_nature_profile`                 |
 
 `ProfileClient` degrades per section rather than failing: missing configuration
 yields a `not-configured` component, a failing provider yields `provider-error`.
@@ -125,7 +185,7 @@ yields a `not-configured` component, a failing provider yields `provider-error`.
 | -------------------------- | -------------------------------- | ------------------------------------------ | ---- | ---------- | ------------------------------------------- |
 | `addresses.search(params)` | Official address register search | query/municipality/county/postalCode/limit | no   | ≤1000/page | **yes** — `search_norwegian_addresses`      |
 | `places.search(params)`    | Official place-name search       | query/municipality/county/limit            | no   | ≤500/page  | no — overlaps address search for AI routing |
-| `places.nearby(params)`    | Place names near a coordinate    | lat/lon/radius≤5000/limit                  | no   | ≤500       | no — niche in v0.1                          |
+| `places.nearby(params)`    | Place names near a coordinate    | lat/lon/radius≤5000/limit                  | no   | ≤500       | via `profiles.natureAtLocation()`           |
 
 ### `weather` — `MetClient` (met)
 
@@ -221,7 +281,7 @@ evidence of statistical comparability.
 | `energy` (nve)            | 4       | `getPowerPlants` returns the full national fleet — a poor output-budget fit without filters the SDK does not offer.           |
 | `parliament` (stortinget) | 9       | Strong candidate for a later release; cut to keep the tool set routable.                                                      |
 | `roads` (vegvesen)        | 7       | Surfaced indirectly through the location profile; standalone NVDB querying is expert-level.                                   |
-| `places` (kartverket)     | 2       | Routing overlap with address search.                                                                                          |
+| `places` (kartverket)     | 2       | Routing overlap with address search. `places.nearby` is reached indirectly through the nature profile.                        |
 
 ## Interpretation and safety limitations carried into tool docs
 
@@ -262,3 +322,36 @@ evidence of statistical comparability.
 - **Marine forecasts are grid-cell output.** The returned coordinate is the model
   cell centre, not the requested point, and BarentsWatch publishes no unit for
   sea-current speed, so none is asserted.
+- **An empty nature result is not an environmental clearance.** The four Naturbase
+  layers the SDK exposes are a selection, not a register of everything of
+  environmental value, and survey coverage is uneven. Every Naturbase-bearing tool
+  result carries a standing warning saying so, and the text rendering repeats it.
+- **Naturbase nature types are the modern NiN localities of national
+  importance** selected for 0.8.0 — not legacy DN-håndbok 13 localities, species
+  observations or locally valuable nature.
+- **Intervention-free nature is one fixed vintage** (January 2023), measures
+  distance from major infrastructure, and confers no protection.
+- **AR50 is generalized, not parcel-precision**, and may merge areas below about
+  15 decares. It is not AR5, and restricted Geovekst/AR5, soil and cultivation
+  products are outside the SDK's scope entirely.
+- **AR50 class codes are passed through.** The SDK deliberately preserves the
+  provider's codes rather than decoding them; this server labels only
+  `landTypeCode`, from the published SOSI `ARTYPE` list, and leaves the other four
+  code lists as codes rather than restating a classification it cannot cite.
+- **No client-side reprojection exists.** Naturbase (EPSG:25833) and NIBIO
+  (EPSG:4258) convert server-side; `sourceCrs` retains the original declaration
+  and an unsupported CRS is rejected rather than reinterpreted.
+- **Geometry is returned whole or not at all.** Holes and multipolygon parts are
+  never silently dropped; an oversized geometry is omitted entirely and reported,
+  with its part, hole and vertex counts still present.
+- **The Geonorge catalogue is metadata, not data, and inclusion is not a reuse
+  licence.** Each catalogued resource carries its own publisher licence and access
+  constraints, and a record with no declared licence is not permission.
+- **No generic service proxy is exposed.** The SDK classifies discovered WFS, WMS,
+  OGC API Features and ArcGIS endpoints but never follows one, and this server
+  accepts no URL, host, endpoint, type name or layer name as tool input.
+- **Miljødirektoratet's intervention-free WFS answers `COUNT=1` invalidly.**
+  Verified live on 0.8.0: because the SDK derives its page size from the remaining
+  limit, a limit of 1 produces `upstream_invalid_response` whenever a zone would
+  match. The two affected tools set a minimum limit of 2 rather than passing a
+  known-broken request through.

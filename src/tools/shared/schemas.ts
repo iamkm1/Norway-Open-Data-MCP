@@ -207,6 +207,71 @@ export const boundingBoxSchema = z
     message: `The bounding box spans more than ${MAX_BOX_SPAN_DEGREES.longitude} degrees of longitude. This is a limit of this MCP server, not of BarentsWatch: a sample of an area that large is not representative of it. Request a smaller area.`,
   });
 
+/**
+ * Largest window the geospatial feature searches accept, in degrees.
+ *
+ * **A limit of this MCP server, not of Miljødirektoratet or NIBIO.** Neither
+ * provider publishes a maximum query extent, and the SDK's own
+ * `boundingBoxSchema` enforces only edge ordering and the antimeridian rule.
+ *
+ * The cap is larger than the AIS one because a mapped protected area is a
+ * static polygon rather than a moving vessel, so a regional question is
+ * meaningful here. It is still a cap: feature geometry is the largest payload
+ * this server can produce, and a box spanning the country would return an
+ * arbitrary first page of it. 2° × 4° is roughly 220 km square at Norwegian
+ * latitudes — a county-sized window.
+ */
+export const MAX_FEATURE_BOX_SPAN_DEGREES = { latitude: 2, longitude: 4 } as const;
+
+/**
+ * A WGS84 bounding box for the Naturbase feature searches.
+ *
+ * Deliberately a separate schema from {@link boundingBoxSchema} rather than a
+ * parameterization of it: the two carry different caps for different reasons,
+ * and the AIS message must keep naming BarentsWatch.
+ */
+export const featureBoundingBoxSchema = z
+  .object({
+    south: latitudeSchema.describe("Southern latitude edge, -90 to 90."),
+    west: longitudeSchema.describe("Western longitude edge, -180 to 180."),
+    north: latitudeSchema.describe("Northern latitude edge, greater than south."),
+    east: longitudeSchema.describe("Eastern longitude edge, greater than west."),
+  })
+  .strict()
+  .refine((box) => box.north > box.south, {
+    message: "The bounding box north edge must be greater than its south edge.",
+  })
+  .refine((box) => box.east > box.west, {
+    message:
+      "The bounding box east edge must be greater than its west edge. A box crossing the antimeridian is not supported by the SDK and is refused here.",
+  })
+  .refine((box) => box.north - box.south <= MAX_FEATURE_BOX_SPAN_DEGREES.latitude, {
+    message: `The bounding box spans more than ${MAX_FEATURE_BOX_SPAN_DEGREES.latitude} degrees of latitude. This is a limit of this MCP server, not of the provider: a bounded page of an area that large is not a survey of it. Request a smaller area.`,
+  })
+  .refine((box) => box.east - box.west <= MAX_FEATURE_BOX_SPAN_DEGREES.longitude, {
+    message: `The bounding box spans more than ${MAX_FEATURE_BOX_SPAN_DEGREES.longitude} degrees of longitude. This is a limit of this MCP server, not of the provider: a bounded page of an area that large is not a survey of it. Request a smaller area.`,
+  });
+
+/**
+ * A Geonorge metadata identifier.
+ *
+ * Geonorge publishes opaque UUID-shaped identifiers. The pattern accepts those
+ * and nothing that could be a location: no scheme, no slash, no whitespace and
+ * no control character, so a URL — the one input that would turn a curated
+ * catalogue tool into an arbitrary-URL proxy — cannot be smuggled in.
+ */
+export const metadataIdSchema = z
+  .string()
+  .trim()
+  .regex(
+    /^[A-Za-z0-9][A-Za-z0-9._:-]{7,127}$/,
+    "Metadata ID must be a Geonorge catalogue identifier such as 6bfe2f5d-...-9b3c. URLs, paths and service endpoints are not accepted: this server does not fetch arbitrary addresses.",
+  )
+  .refine(
+    (value) => !value.includes("://"),
+    "Metadata ID must be a catalogue identifier, not a URL. This server never fetches a caller-supplied address.",
+  );
+
 export function searchQuerySchema(label = "Query", min = 2, max = 200) {
   return nonBlank(label, min, max);
 }

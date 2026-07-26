@@ -86,6 +86,127 @@ export const altitudeSchema = z
   .min(-500, "Altitude must be between -500 and 9000 metres.")
   .max(9_000, "Altitude must be between -500 and 9000 metres.");
 
+/**
+ * A Maritime Mobile Service Identity.
+ *
+ * Kept as a string, never a number, because leading zeros are significant and
+ * `Number("002310495")` would silently discard them. The SDK documents one to
+ * nine digits; nine is the standard length, but shorter identities exist for
+ * some station classes, so the range is not narrowed further here.
+ */
+export const mmsiSchema = z
+  .string()
+  .trim()
+  .regex(/^\d{1,9}$/, "MMSI must be 1-9 digits, for example 257123456. Do not include spaces.");
+
+/**
+ * A Norwegian fishing-vessel registration mark.
+ *
+ * The register stores `R 0062H` and also accepts the hyphenated `R-62-H`
+ * people write on paper. The SDK's `normalizeRegistrationMark` rewrites between
+ * those forms, so this only has to refuse input that is not a mark at all.
+ */
+export const registrationMarkSchema = z
+  .string()
+  .trim()
+  .toUpperCase()
+  .pipe(
+    z
+      .string()
+      .regex(
+        /^[A-ZÆØÅ]{1,2}[\s-]?\d{1,4}[\s-]?[A-ZÆØÅ]{0,2}$/,
+        "Registration mark must look like R 0062H, R-62-H or F 12 T.",
+      ),
+  );
+
+/**
+ * A maritime radio call sign.
+ *
+ * The one identifier AIS and the fishing-vessel register both publish, which is
+ * what lets the vessel profile join them. Norwegian call signs are three
+ * letters and four characters (e.g. `LDMV`), but foreign vessels appear too, so
+ * the pattern stays general.
+ */
+export const callSignSchema = z
+  .string()
+  .trim()
+  .toUpperCase()
+  .pipe(
+    z
+      .string()
+      .regex(/^[A-Z0-9]{3,10}$/, "Call sign must be 3-10 letters or digits, for example LDMV."),
+  );
+
+/** Fiskeridirektoratet's public aquaculture site number (lokalitetsnummer). */
+export const siteNumberSchema = z
+  .string()
+  .trim()
+  .regex(/^\d{1,7}$/, "Site number must be 1-7 digits, for example 10318.");
+
+/** Production-area code along the Norwegian coast, 1-13. */
+export const productionAreaCodeSchema = z
+  .string()
+  .trim()
+  .regex(/^\d{1,2}$/, "Production area code must be one or two digits, 1 to 13.")
+  .refine((value) => {
+    const parsed = Number(value);
+    return parsed >= 1 && parsed <= 13;
+  }, "Production area code must be between 1 and 13.");
+
+/**
+ * Largest window this MCP server will accept, in degrees.
+ *
+ * **This is a limit imposed by this MCP server, not by BarentsWatch.**
+ * BarentsWatch publishes no maximum bounding-box size for its AIS APIs, and the
+ * SDK's own `boundingBoxSchema` enforces only latitude/longitude ranges, edge
+ * ordering and a refusal to cross the antimeridian. A caller using the SDK
+ * directly may request any box the provider will serve.
+ *
+ * The cap exists because of what MCP is: a tool call returns one bounded result
+ * into a model's context window. AIS traffic scales with sea area, so a box
+ * spanning the whole Norwegian coast would fill the result budget with whichever
+ * few vessels happened to transmit first — an answer that looks like an area
+ * survey but is an arbitrary sample of one. Refusing the request is more honest
+ * than returning that, and it also keeps one tool call from holding a
+ * high-volume stream open on the provider's behalf.
+ *
+ * 6° × 12° is roughly the Norwegian coast from Stavanger to Trondheim: large
+ * enough for any real regional question, small enough that a sample of it means
+ * something. It is a product decision and may be revised; it is not a provider
+ * constraint and must not be documented as one.
+ */
+export const MAX_BOX_SPAN_DEGREES = { latitude: 6, longitude: 12 } as const;
+
+/**
+ * A WGS84 bounding box, validated before the SDK sees it.
+ *
+ * The SDK enforces the same ordering rules and rejects an antimeridian-crossing
+ * box. Re-stating them here means the caller gets a field-level schema error
+ * naming the edge that is wrong, rather than a provider-shaped error after the
+ * request has already been built.
+ */
+export const boundingBoxSchema = z
+  .object({
+    south: latitudeSchema.describe("Southern latitude edge, -90 to 90."),
+    west: longitudeSchema.describe("Western longitude edge, -180 to 180."),
+    north: latitudeSchema.describe("Northern latitude edge, greater than south."),
+    east: longitudeSchema.describe("Eastern longitude edge, greater than west."),
+  })
+  .strict()
+  .refine((box) => box.north > box.south, {
+    message: "The bounding box north edge must be greater than its south edge.",
+  })
+  .refine((box) => box.east > box.west, {
+    message:
+      "The bounding box east edge must be greater than its west edge. A box crossing the antimeridian is not supported.",
+  })
+  .refine((box) => box.north - box.south <= MAX_BOX_SPAN_DEGREES.latitude, {
+    message: `The bounding box spans more than ${MAX_BOX_SPAN_DEGREES.latitude} degrees of latitude. This is a limit of this MCP server, not of BarentsWatch: a sample of an area that large is not representative of it. Request a smaller area.`,
+  })
+  .refine((box) => box.east - box.west <= MAX_BOX_SPAN_DEGREES.longitude, {
+    message: `The bounding box spans more than ${MAX_BOX_SPAN_DEGREES.longitude} degrees of longitude. This is a limit of this MCP server, not of BarentsWatch: a sample of an area that large is not representative of it. Request a smaller area.`,
+  });
+
 export function searchQuerySchema(label = "Query", min = 2, max = 200) {
   return nonBlank(label, min, max);
 }

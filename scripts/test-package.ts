@@ -16,7 +16,7 @@ import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
-const EXPECTED_TOOL_COUNT = 12;
+const EXPECTED_TOOL_COUNT = 20;
 
 /** Files that must never ship: tests, fixtures, secrets, coverage, sources. */
 const FORBIDDEN_PATTERNS: { label: string; test: (path: string) => boolean }[] = [
@@ -231,7 +231,15 @@ async function main(): Promise<void> {
 function verifyMcpServer(binary: string, cwd: string): Promise<void> {
   return new Promise((resolvePromise, rejectPromise) => {
     const child = spawn(process.execPath, [binary], { cwd, stdio: ["pipe", "pipe", "pipe"] });
-    let stdout = "";
+    /**
+     * Holds only the bytes after the last newline seen so far.
+     *
+     * A JSON-RPC frame larger than one stdout chunk — which `tools/list` is —
+     * arrives split, so parsing everything received would parse a half-frame
+     * and report perfectly valid output as non-protocol. Complete lines are
+     * taken off the front and the remainder is carried to the next chunk.
+     */
+    let pending = "";
     let stderr = "";
     const timer = setTimeout(() => {
       child.kill();
@@ -242,9 +250,14 @@ function verifyMcpServer(binary: string, cwd: string): Promise<void> {
     child.stderr.setEncoding("utf8");
     child.stderr.on("data", (chunk: string) => (stderr += chunk));
     child.stdout.on("data", (chunk: string) => {
-      stdout += chunk;
+      pending += chunk;
 
-      const lines = stdout.split("\n").filter((line) => line.trim().length > 0);
+      const parts = pending.split("\n");
+      // The final element is whatever followed the last newline: either "" when
+      // the chunk ended cleanly, or an incomplete frame still being written.
+      pending = parts.pop() ?? "";
+      const lines = parts.filter((line) => line.trim().length > 0);
+
       for (const line of lines) {
         let message: { id?: number; result?: { tools?: unknown[] } };
         try {

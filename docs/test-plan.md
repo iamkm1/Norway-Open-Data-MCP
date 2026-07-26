@@ -17,7 +17,7 @@ declares.
 
 ## Unit tests — per tool
 
-Each of the twelve tools is tested for the full matrix required by the brief:
+Each of the twenty tools is tested for the full matrix required by the brief:
 
 1. valid request
 2. minimum input (only required fields)
@@ -37,6 +37,41 @@ Each of the twelve tools is tested for the full matrix required by the brief:
 14. attribution — asserts `sources[]` matches the provider registry exactly
 15. structured output — asserts it validates against the declared `outputSchema`
 16. text fallback — asserts deterministic, non-empty, budget-respecting text
+
+Items 12 and 13 are **registry-driven**: `tests/unit/cancellation.test.ts`
+iterates `allTools`, so a tool added later that forgets to forward `{ signal }`
+fails automatically rather than being silently uncovered.
+
+## Maritime tests
+
+The maritime tools add failure modes the earlier tools do not have, so they get
+two dedicated files.
+
+`tests/unit/maritime-tools.test.ts` covers registration (all eight present
+exactly once, the original twelve unchanged in name **and order**), SDK
+delegation (each tool calls the method the SDK declares, with the parameters it
+declares), credential gating (both variables named, only the missing half named
+when one is set, and the anonymous registers working with an empty config),
+input validation, partial-profile provenance, and redaction of a client secret
+and bearer token echoed back inside a provider error.
+
+`tests/unit/live-vessel-positions.test.ts` covers the bounded stream. Its fake
+feed is finite or abort-driven and records whether the consumer released the
+iterator, so every test asserts **both** that the tool returned and that the
+connection was closed:
+
+- stops at the limit and releases the iterator while the timeout is still 10 s
+  away — proving the release is caused by the limit, not by the timeout;
+- returns a partial sample on timeout rather than hanging, and an empty sample
+  for a quiet area, which is a success and not an error;
+- closes on caller cancellation and reports `cancelled`, not a provider failure;
+- surfaces a genuine provider error rather than swallowing it as a timeout;
+- refuses every request missing any of the three mandatory bounds, and refuses
+  inverted, antimeridian-crossing, non-finite and oversized boxes — asserting in
+  each case that **no stream was opened**.
+
+Timeouts in these tests are hundreds of milliseconds, so the suite stays fast and
+fully deterministic offline.
 
 ## Shared-behaviour tests
 

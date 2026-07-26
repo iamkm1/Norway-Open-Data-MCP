@@ -32,7 +32,20 @@ ENVIRONMENT
                               Defaults to ${PACKAGE_NAME}/${PACKAGE_VERSION}.
   ${ENV_VARS.contactEmail}  Contact address required by MET Norway. Without it the
                               weather tool returns a clear configuration error.
-  ${ENV_VARS.nveApiKey}    Optional free NVE HydAPI key. No v0.1 tool requires it.
+  ${ENV_VARS.nveApiKey}    Optional free NVE HydAPI key. No current tool requires it.
+  ${ENV_VARS.barentswatchClientId}
+  ${ENV_VARS.barentswatchClientSecret}
+                              BarentsWatch OAuth2 client credentials (api scope).
+                              Both are required together. Without them
+                              get_marine_forecast returns a configuration error.
+  ${ENV_VARS.barentswatchAisClientId}
+  ${ENV_VARS.barentswatchAisClientSecret}
+                              BarentsWatch OAuth2 client credentials (ais scope).
+                              A separate registered client from the one above.
+                              Both are required together. Without them
+                              get_vessel_profile, get_vessel_track and
+                              get_live_vessel_positions return a configuration
+                              error. Every other tool keeps working.
   ${ENV_VARS.timeoutMs}     Request timeout in ms (1000-60000, default 10000).
   ${ENV_VARS.retries}       Retry attempts after the first (0-5, default 2).
   ${ENV_VARS.cache}         In-process response cache (1 or 0, default 1).

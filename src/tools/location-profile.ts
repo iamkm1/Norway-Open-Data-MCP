@@ -13,6 +13,7 @@ import {
   hazardSchema,
   missingSections,
   projectAddress,
+  componentProvenance,
   projectComponents,
   projectHazard,
   renderHazardLines,
@@ -144,7 +145,7 @@ async function handler(
 
   return buildEnvelope<Data>({
     data,
-    responses: [response],
+    responses: componentProvenance(response),
     warnings,
     truncation: tracker.report(),
     partial:

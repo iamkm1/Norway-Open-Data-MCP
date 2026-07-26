@@ -10,6 +10,7 @@ import {
   componentWarnings,
   missingSections,
   projectAddress,
+  componentProvenance,
   projectComponents,
 } from "./shared/profile.js";
 import type { ToolDefinition, ToolInvocation } from "./types.js";
@@ -132,7 +133,7 @@ async function handler(
 
   return buildEnvelope<Data>({
     data,
-    responses: [response],
+    responses: componentProvenance(response),
     warnings,
     truncation: tracker.report(),
     partial:

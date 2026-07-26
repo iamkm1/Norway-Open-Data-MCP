@@ -12,11 +12,17 @@
 import type {
   AddressProfile,
   AddressSearchResult,
+  AisPosition,
+  AisTrack,
+  AquacultureSite,
+  AquacultureSiteSearchResult,
   AutocompletePlace,
   CompanyProfile,
   CompanySearchResult,
   Departure,
   ElectricityPrice,
+  FisheriesVesselSearchResult,
+  FishingVessel,
   HazardWarning,
   KlassCode,
   KlassCodeResolution,
@@ -24,8 +30,11 @@ import type {
   MunicipalityProfile,
   OpenDataResponse,
   OpenDataSource,
+  SeaCurrentForecast,
   StatisticsResult,
   StatisticsTableMetadata,
+  VesselProfile,
+  WaveForecast,
   WeatherForecast,
 } from "norway-open-data-sdk";
 
@@ -97,6 +106,63 @@ export const SOURCES: Record<string, OpenDataSource> = {
     license: "Provider describes the API as open and free; no standardized licence stated",
     attribution: "Credit hvakosterstrommen.no.",
   },
+  barentswatch: {
+    id: "barentswatch",
+    name: "BarentsWatch",
+    homepage: "https://www.barentswatch.no/",
+    documentation: "https://developer.barentswatch.no/docs/appreg/",
+    license: "Norwegian Licence for Open Government Data (NLOD)",
+    attribution: "Credit BarentsWatch and the wave forecast's own upstream model provider.",
+  },
+  "barentswatch-ais": {
+    id: "barentswatch-ais",
+    name: "BarentsWatch AIS",
+    homepage: "https://www.barentswatch.no/",
+    documentation: "https://developer.barentswatch.no/docs/AIS/live-ais-api/",
+    license: "Norwegian Licence for Open Government Data (NLOD)",
+    attribution:
+      "AIS data is provided by the Norwegian Coastal Administration (Kystverket) via BarentsWatch; credit both.",
+  },
+  "fiskeridir-vessels": {
+    id: "fiskeridir-vessels",
+    name: "Norwegian Directorate of Fisheries — vessel register",
+    homepage: "https://www.fiskeridir.no/english",
+    documentation: "https://api.fiskeridir.no/vessel-api/api/openapi.json",
+    license: "Fiskeridirektoratet data licence, published under NLOD terms",
+    attribution: "Credit the Norwegian Directorate of Fisheries (Fiskeridirektoratet).",
+  },
+  "fiskeridir-aqua": {
+    id: "fiskeridir-aqua",
+    name: "Norwegian Directorate of Fisheries — aquaculture register",
+    homepage: "https://www.fiskeridir.no/english",
+    documentation: "https://api.fiskeridir.no/pub-aqua/api/swagger-ui/index.html",
+    license: "Fiskeridirektoratet data licence, published under NLOD terms",
+    attribution: "Credit the Norwegian Directorate of Fisheries (Fiskeridirektoratet).",
+  },
+};
+
+/**
+ * The synthetic composite source the SDK puts on a **composed profile**.
+ *
+ * Copied verbatim from a live `profiles.vessel()` response on SDK 0.7.0. It
+ * carries no `license` and no `attribution` and its homepage is the SDK's own
+ * repository, which is precisely why profile tools must build provenance from
+ * their components instead. Fixtures use this so the offline suite cannot
+ * accidentally pass on attribution the real provider never sends.
+ */
+export const COMPOSITE_PROFILE_SOURCES: Record<string, OpenDataSource> = {
+  vessel: {
+    id: "barentswatch-ais+kartverket",
+    name: "BarentsWatch AIS and Kartverket",
+    homepage: "https://github.com/iamkm1/Norway-Open-Data",
+    documentation: "https://github.com/iamkm1/Norway-Open-Data#cross-provider-vessel-profile",
+  },
+  company: {
+    id: "brreg+kartverket",
+    name: "Brønnøysundregistrene and Kartverket",
+    homepage: "https://github.com/iamkm1/Norway-Open-Data",
+    documentation: "https://github.com/iamkm1/Norway-Open-Data#cross-provider-company-profile",
+  },
 };
 
 export function respond<T>(
@@ -155,6 +221,11 @@ export function abortable(): (...args: unknown[]) => Promise<never> {
 const notImplemented = (method: string) => (): Promise<never> =>
   Promise.reject(new Error(`Fake SDK: ${method} was called but not configured for this test.`));
 
+/** Synchronous form, for the streaming methods that return rather than resolve. */
+const notImplementedStream = (method: string) => (): AsyncIterable<never> => {
+  throw new Error(`Fake SDK: ${method} was called but not configured for this test.`);
+};
+
 export type FakeSdkOverrides = {
   companies?: Partial<NorwayOpenDataLike["companies"]>;
   profiles?: Partial<NorwayOpenDataLike["profiles"]>;
@@ -165,6 +236,9 @@ export type FakeSdkOverrides = {
   transport?: Partial<NorwayOpenDataLike["transport"]>;
   statistics?: Partial<NorwayOpenDataLike["statistics"]>;
   klass?: Partial<NorwayOpenDataLike["klass"]>;
+  ais?: Partial<NorwayOpenDataLike["ais"]>;
+  marine?: Partial<NorwayOpenDataLike["marine"]>;
+  fisheries?: Partial<NorwayOpenDataLike["fisheries"]>;
 };
 
 /**
@@ -179,6 +253,7 @@ export function createFakeSdk(overrides: FakeSdkOverrides = {}): NorwayOpenDataL
       company: notImplemented("profiles.company"),
       address: notImplemented("profiles.address"),
       municipality: notImplemented("profiles.municipality"),
+      vessel: notImplemented("profiles.vessel"),
       ...overrides.profiles,
     },
     addresses: { search: notImplemented("addresses.search"), ...overrides.addresses },
@@ -211,7 +286,89 @@ export function createFakeSdk(overrides: FakeSdkOverrides = {}): NorwayOpenDataL
       getCode: notImplemented("klass.getCode"),
       ...overrides.klass,
     },
+    ais: {
+      getTrackLast24Hours: notImplemented("ais.getTrackLast24Hours"),
+      getTrack: notImplemented("ais.getTrack"),
+      streamPositions: notImplementedStream("ais.streamPositions"),
+      ...overrides.ais,
+    },
+    marine: {
+      getWaveForecast: notImplemented("marine.getWaveForecast"),
+      getSeaCurrent: notImplemented("marine.getSeaCurrent"),
+      ...overrides.marine,
+    },
+    fisheries: {
+      searchVessels: notImplemented("fisheries.searchVessels"),
+      getVessel: notImplemented("fisheries.getVessel"),
+      searchAquacultureSites: notImplemented("fisheries.searchAquacultureSites"),
+      getAquacultureSite: notImplemented("fisheries.getAquacultureSite"),
+      ...overrides.fisheries,
+    },
   };
+}
+
+/**
+ * A finite AIS stream, for tests that must stay deterministic and offline.
+ *
+ * `closed` records whether the consumer released the iterator — by `break`,
+ * by throwing, or by abort — which is exactly what
+ * `get_live_vessel_positions` must guarantee on every path.
+ */
+export type FakeStreamParameters = Record<string, unknown> & { signal?: AbortSignal };
+
+export type FakeStream = {
+  stream: (parameters?: FakeStreamParameters) => AsyncIterable<AisPosition>;
+  /** True once the iterator's `return()` ran or its signal aborted. */
+  closed: () => boolean;
+  /** Parameters the tool passed on the most recent call. */
+  lastParameters: () => FakeStreamParameters | undefined;
+};
+
+/**
+ * Builds a stream that yields `items` and then, if `endless` is set, waits for
+ * an abort instead of completing — the shape of the real live feed.
+ */
+export function createFakeStream(
+  items: readonly AisPosition[],
+  options: { endless?: boolean; delayMs?: number } = {},
+): FakeStream {
+  let closed = false;
+  let lastParameters: FakeStreamParameters | undefined;
+
+  const stream = (parameters?: FakeStreamParameters): AsyncIterable<AisPosition> => {
+    lastParameters = parameters;
+    const signal = parameters?.signal;
+
+    return {
+      async *[Symbol.asyncIterator](): AsyncGenerator<AisPosition, void, undefined> {
+        try {
+          for (const item of items) {
+            if (signal?.aborted === true) return;
+            if (options.delayMs) {
+              await new Promise((resolve) => setTimeout(resolve, options.delayMs));
+            }
+            yield item;
+          }
+          if (options.endless === true) {
+            // Never resolves on its own. Only an abort ends it, which is how the
+            // real feed behaves in a quiet area.
+            await new Promise<void>((resolve) => {
+              if (signal?.aborted === true) {
+                resolve();
+                return;
+              }
+              signal?.addEventListener("abort", () => resolve(), { once: true });
+            });
+          }
+        } finally {
+          // Runs on normal completion, on `break` (via `return()`) and on throw.
+          closed = true;
+        }
+      },
+    };
+  };
+
+  return { stream, closed: () => closed, lastParameters: () => lastParameters };
 }
 
 // ---------------------------------------------------------------------------
@@ -528,4 +685,219 @@ export const sampleKlassCode: KlassCode = {
   name: "Oslo",
   level: "1",
   validFrom: "2020-01-01",
+};
+
+// ---------------------------------------------------------------------------
+// Maritime sample payloads
+// ---------------------------------------------------------------------------
+
+export const sampleAisTrack: AisTrack = {
+  mmsi: "257123456",
+  points: Array.from({ length: 12 }, (_unused, index) => ({
+    mmsi: "257123456",
+    messageTime: new Date(Date.UTC(2026, 6, 23, 6 + index)).toISOString(),
+    latitude: 63.4 + index * 0.01,
+    longitude: 10.4 + index * 0.02,
+    name: "NORDLYS",
+    courseOverGround: 245.3,
+    speedOverGround: 12.4,
+    trueHeading: 244,
+    navigationalStatus: 0,
+    shipType: 60,
+    stream: "terrestrial",
+  })),
+  from: "2026-07-23T06:00:00.000Z",
+  to: "2026-07-23T17:00:00.000Z",
+};
+
+export const sampleAisPositions: AisPosition[] = Array.from({ length: 5 }, (_unused, index) => ({
+  kind: "position" as const,
+  mmsi: `25712345${index}`,
+  messageTime: new Date(Date.UTC(2026, 6, 23, 12, index)).toISOString(),
+  messageType: 1,
+  latitude: 63.4 + index * 0.005,
+  longitude: 10.4 + index * 0.005,
+  courseOverGround: 180 + index,
+  speedOverGround: 8 + index,
+  trueHeading: 180,
+  navigationalStatus: 0,
+  aisClass: "A",
+  stream: "terrestrial",
+}));
+
+/**
+ * A fishing vessel with one company owner and one natural-person owner.
+ *
+ * The person branch carries no identifying fields, exactly as the SDK publishes
+ * it. Tests assert that nothing about that owner reaches a tool result.
+ */
+export const sampleFishingVessel: FishingVessel = {
+  id: "10412",
+  name: "HAVSTRAUM",
+  registrationMark: "R 0062H",
+  radioCallSign: "LDMV",
+  imoNumber: "9123456",
+  municipalityCode: "1103",
+  tonnageType: "LC",
+  tonnage: 412,
+  length: 34.8,
+  width: 8.6,
+  enginePower: 1200,
+  engineBuildYear: 2014,
+  buildYear: 2012,
+  measureDate: "2012-06-01",
+  registrationDate: "2012-08-15",
+  owners: [
+    {
+      entityType: "company",
+      organizationNumber: "912345678",
+      name: "HAVSTRAUM AS",
+      postalCode: "4370",
+      city: "EGERSUND",
+    },
+    { entityType: "person" },
+  ],
+};
+
+export const sampleFishingVesselSearch: FisheriesVesselSearchResult = {
+  items: [sampleFishingVessel],
+  pagination: { page: 1, pageSize: 10, hasMore: false },
+};
+
+export const sampleAquacultureSite: AquacultureSite = {
+  siteNumber: "10318",
+  name: "STORVIKA",
+  placementType: "Offshore",
+  waterType: "Salt",
+  latitude: 63.7412,
+  longitude: 9.2188,
+  capacity: 3120,
+  capacityUnitType: "TN",
+  firstClearanceTime: "2004-05-12T00:00:00Z",
+  placement: {
+    municipalityCode: "5055",
+    municipalityName: "Heim",
+    countyCode: "50",
+    countyName: "Trøndelag",
+    productionAreaCode: "6",
+    productionAreaName: "Nordmøre og Sør-Trøndelag",
+    productionAreaStatus: "GRØNN",
+  },
+  speciesTypes: ["Salmon", "Rainbow trout"],
+  isSlaughterhouse: false,
+  hasCommercialActivity: true,
+  licences: [{ licenceNumber: "H-KM-0018", validFrom: "2004-05-12T00:00:00Z" }],
+};
+
+export const sampleAquacultureSearch: AquacultureSiteSearchResult = {
+  items: [sampleAquacultureSite],
+  pagination: { offset: 0, limit: 10, hasMore: false },
+};
+
+export const sampleWaveForecast: WaveForecast = {
+  forecastTime: "2026-07-23T12:00:00Z",
+  significantWaveHeight: 1.8,
+  maximumWaveHeight: 3.1,
+  meanWaveDirection: 212,
+  peakPeriod: 7.4,
+  latitude: 63.75,
+  longitude: 9.25,
+};
+
+export const sampleSeaCurrent: SeaCurrentForecast = {
+  forecastTime: "2026-07-23T12:00:00Z",
+  speed: 0.42,
+  direction: 118,
+  latitude: 63.75,
+  longitude: 9.25,
+};
+
+/** A complete vessel profile: AIS available, register matched, weather present. */
+export const sampleVesselProfile: VesselProfile = {
+  mmsi: "257123456",
+  ais: {
+    status: "available",
+    latestPosition: sampleAisTrack.points.at(-1)!,
+    track: sampleAisTrack,
+    identity: {
+      name: "HAVSTRAUM",
+      callSign: "LDMV",
+      imoNumber: "9123456",
+      shipType: 30,
+    },
+  },
+  registration: sampleFishingVessel,
+  weather: {
+    time: "2026-07-23T17:00:00Z",
+    temperature: 13.2,
+    windSpeed: 6.1,
+    symbolCode: "cloudy",
+  },
+  nearestPlace: {
+    name: "Storvika",
+    type: "vik",
+    municipalityCode: "5055",
+    municipalityName: "Heim",
+    countyName: "Trøndelag",
+  },
+  components: [
+    {
+      operation: "ais.getVesselSnapshot",
+      section: "ais",
+      status: "available",
+      source: SOURCES["barentswatch-ais"]!,
+      retrievedAt: "2026-07-23T12:00:00.000Z",
+      cached: false,
+    },
+    {
+      operation: "fisheries.searchVessels",
+      section: "registration",
+      status: "available",
+      source: SOURCES["fiskeridir-vessels"]!,
+      retrievedAt: "2026-07-23T12:00:00.000Z",
+      cached: false,
+    },
+  ],
+};
+
+/**
+ * A degraded profile: AIS held nothing, the register was not applicable, MET is
+ * not configured and the place lookup failed. Every omission reason the tools
+ * must explain, in one payload.
+ */
+export const samplePartialVesselProfile: VesselProfile = {
+  mmsi: "257000999",
+  ais: { status: "no-recent-data" },
+  components: [
+    {
+      operation: "ais.getTrackLast24Hours",
+      section: "ais",
+      status: "available",
+      source: SOURCES["barentswatch-ais"]!,
+      retrievedAt: "2026-07-23T12:00:00.000Z",
+      cached: false,
+    },
+    {
+      operation: "fisheries.searchVessels",
+      section: "registration",
+      status: "omitted",
+      source: SOURCES["fiskeridir-vessels"]!,
+      reason: "not-applicable",
+    },
+    {
+      operation: "weather.current",
+      section: "weather",
+      status: "omitted",
+      source: SOURCES["met"]!,
+      reason: "not-configured",
+    },
+    {
+      operation: "places.nearby",
+      section: "place",
+      status: "omitted",
+      source: SOURCES["kartverket"]!,
+      reason: "provider-error",
+      error: { name: "ProviderError", message: "Kartverket returned HTTP 503." },
+    },
+  ],
 };

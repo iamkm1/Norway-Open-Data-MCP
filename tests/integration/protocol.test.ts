@@ -154,6 +154,76 @@ describe("MCP client over a spawned subprocess", () => {
     expect(tools).toHaveLength(EXPECTED_TOOL_COUNT);
   });
 
+  it("advertises all eight maritime tools with strict schemas over stdio", async () => {
+    const { tools } = await client.listTools();
+    const byName = new Map(tools.map((tool) => [tool.name, tool]));
+
+    for (const name of [
+      "get_vessel_profile",
+      "get_vessel_track",
+      "get_live_vessel_positions",
+      "search_fishing_vessels",
+      "get_fishing_vessel",
+      "search_aquaculture_locations",
+      "get_aquaculture_location",
+      "get_marine_forecast",
+    ]) {
+      const tool = byName.get(name);
+      expect(tool, name).toBeDefined();
+      expect(tool!.inputSchema.additionalProperties, name).toBe(false);
+      expect(tool!.outputSchema, name).toBeDefined();
+      expect(tool!.annotations?.readOnlyHint, name).toBe(true);
+    }
+  });
+
+  it("returns a readable credential error for the AIS tools, naming both variables", async () => {
+    // This subprocess has no BarentsWatch credentials configured.
+    const result = await client.callTool({
+      name: "get_vessel_profile",
+      arguments: { mmsi: "257123456" },
+    });
+
+    expect(result.isError).toBe(true);
+    const text = (result.content as { type: string; text: string }[])[0]!.text;
+    expect(text).toContain("NORWAY_MCP_BARENTSWATCH_AIS_CLIENT_ID");
+    expect(text).toContain("NORWAY_MCP_BARENTSWATCH_AIS_CLIENT_SECRET");
+    expect(result.structuredContent).toBeUndefined();
+  });
+
+  it("rejects a live-feed request that omits any of its three bounds", async () => {
+    // No credentials are needed to prove this: the schema rejects the request
+    // before the environment gate is reached, so no stream is ever opened.
+    for (const args of [
+      { limit: 10, timeoutMs: 1000 },
+      { boundingBox: { south: 63.3, west: 10.2, north: 63.6, east: 10.7 }, timeoutMs: 1000 },
+      { boundingBox: { south: 63.3, west: 10.2, north: 63.6, east: 10.7 }, limit: 10 },
+      // Inverted box.
+      {
+        boundingBox: { south: 63.6, west: 10.2, north: 63.3, east: 10.7 },
+        limit: 10,
+        timeoutMs: 1000,
+      },
+    ]) {
+      const result = await client.callTool({ name: "get_live_vessel_positions", arguments: args });
+      expect(result.isError, JSON.stringify(args)).toBe(true);
+    }
+  });
+
+  it("routes a credential-free maritime request to its handler and stays alive", async () => {
+    // The Fiskeridirektoratet registers are anonymous, so a well-formed request
+    // needs no configuration. CI may or may not have network: a success or a
+    // clean provider error are both acceptable. What must hold is a well-formed
+    // MCP result and a session that keeps serving afterwards.
+    const result = await client.callTool({
+      name: "get_aquaculture_location",
+      arguments: { siteNumber: "10318" },
+    });
+
+    expect(result).toHaveProperty("content");
+    const { tools } = await client.listTools();
+    expect(tools).toHaveLength(EXPECTED_TOOL_COUNT);
+  });
+
   it("keeps serving requests after an error", async () => {
     await client.callTool({ name: "search_norwegian_companies", arguments: { limit: -1 } });
     const { tools } = await client.listTools();
@@ -313,6 +383,10 @@ describe("CLI modes exit before any transport starts", () => {
       "NORWAY_MCP_APP_NAME",
       "NORWAY_MCP_CONTACT_EMAIL",
       "NORWAY_MCP_NVE_API_KEY",
+      "NORWAY_MCP_BARENTSWATCH_CLIENT_ID",
+      "NORWAY_MCP_BARENTSWATCH_CLIENT_SECRET",
+      "NORWAY_MCP_BARENTSWATCH_AIS_CLIENT_ID",
+      "NORWAY_MCP_BARENTSWATCH_AIS_CLIENT_SECRET",
       "NORWAY_MCP_TIMEOUT_MS",
       "NORWAY_MCP_RETRIES",
       "NORWAY_MCP_CACHE",
@@ -325,8 +399,29 @@ describe("CLI modes exit before any transport starts", () => {
   it("--doctor reports readiness and exits zero", async () => {
     const result = await run(["--doctor"]);
     expect(result.code).toBe(0);
-    expect(result.stdout).toContain("Tools (12)");
+    expect(result.stdout).toContain("Tools (20)");
     expect(result.stdout).toContain("No network requests were made");
+  });
+
+  it("--doctor never prints a configured BarentsWatch credential", async () => {
+    const child = await new Promise<{ stdout: string }>((resolve) => {
+      const process_ = spawn(process.execPath, [CLI, "--doctor"], {
+        stdio: ["ignore", "pipe", "pipe"],
+        env: {
+          ...process.env,
+          NORWAY_MCP_BARENTSWATCH_AIS_CLIENT_ID: "doctor-ais-id-secretvalue",
+          NORWAY_MCP_BARENTSWATCH_AIS_CLIENT_SECRET: "doctor-ais-secret-value",
+        },
+      });
+      let out = "";
+      process_.stdout.on("data", (chunk: Buffer) => (out += chunk.toString()));
+      process_.on("exit", () => resolve({ stdout: out }));
+    });
+
+    expect(child.stdout).not.toContain("doctor-ais-id-secretvalue");
+    expect(child.stdout).not.toContain("doctor-ais-secret-value");
+    expect(child.stdout).toContain("NORWAY_MCP_BARENTSWATCH_AIS_CLIENT_SECRET: (set, masked)");
+    expect(child.stdout).toContain("get_vessel_profile: ready");
   });
 
   it("rejects an unknown flag on stderr, keeping stdout clean", async () => {

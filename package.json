@@ -1,6 +1,6 @@
 {
   "name": "norway-open-data-mcp",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Local MCP server that gives AI assistants curated read-only tools for Norwegian public data, built on norway-open-data-sdk.",
   "keywords": [
     "mcp",
@@ -71,7 +71,7 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
-    "norway-open-data-sdk": "^0.6.0",
+    "norway-open-data-sdk": "^0.7.0",
     "zod": "^4.1.13"
   },
   "devDependencies": {

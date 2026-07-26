@@ -256,7 +256,47 @@ describe("configuration", () => {
     const { config } = resolveConfig({
       NORWAY_MCP_CONTACT_EMAIL: "ola@example.com",
       NORWAY_MCP_NVE_API_KEY: "key-123456",
+      NORWAY_MCP_BARENTSWATCH_CLIENT_ID: "bw-client-id",
+      NORWAY_MCP_BARENTSWATCH_CLIENT_SECRET: "bw-client-secret",
+      NORWAY_MCP_BARENTSWATCH_AIS_CLIENT_ID: "ais-client-id",
+      NORWAY_MCP_BARENTSWATCH_AIS_CLIENT_SECRET: "ais-client-secret",
     });
-    expect(secretsOf(config)).toEqual(["ola@example.com", "key-123456"]);
+
+    // OAuth2 client ids are redacted alongside the secrets: a client id is not
+    // a password, but it identifies a registered client and has no place in a
+    // tool result or a log line.
+    expect(secretsOf(config)).toEqual([
+      "ola@example.com",
+      "key-123456",
+      "bw-client-id",
+      "bw-client-secret",
+      "ais-client-id",
+      "ais-client-secret",
+    ]);
+  });
+
+  it("refuses a half-configured OAuth2 pair rather than failing at the token endpoint", () => {
+    const { config, problems } = resolveConfig({
+      NORWAY_MCP_BARENTSWATCH_AIS_CLIENT_ID: "ais-client-id",
+    });
+
+    expect(config.barentswatchAisClientId).toBeUndefined();
+    expect(config.barentswatchAisClientSecret).toBeUndefined();
+    expect(problems.map((problem) => problem.variable)).toContain(
+      "NORWAY_MCP_BARENTSWATCH_AIS_CLIENT_SECRET",
+    );
+  });
+
+  it("keeps the two BarentsWatch credential scopes separate", () => {
+    // BarentsWatch issues a separate registered client for AIS; a secret set
+    // for one scope must never appear in the other.
+    const { config } = resolveConfig({
+      NORWAY_MCP_BARENTSWATCH_CLIENT_ID: "api-id",
+      NORWAY_MCP_BARENTSWATCH_CLIENT_SECRET: "api-secret",
+    });
+
+    expect(config.barentswatchClientId).toBe("api-id");
+    expect(config.barentswatchAisClientId).toBeUndefined();
+    expect(config.barentswatchAisClientSecret).toBeUndefined();
   });
 });

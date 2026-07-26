@@ -530,6 +530,163 @@
       "mustNotSelect": ["query_norwegian_statistics"],
       "reason": "A bounded code-pattern range query over an official classification, not a statistics query.",
       "requiredArguments": { "classificationId": 6, "codePattern": "01-05" }
+    },
+    {
+      "id": "vessel-profile-by-mmsi-en",
+      "question": "Tell me about the vessel with MMSI 257123456 — where is it and what is it?",
+      "language": "en",
+      "expectedTool": "get_vessel_profile",
+      "mustNotSelect": ["get_vessel_track", "get_live_vessel_positions"],
+      "reason": "One named vessel identified by MMSI, wanting identity and current position rather than a movement history or an area sweep.",
+      "requiredArguments": { "mmsi": "257123456" }
+    },
+    {
+      "id": "vessel-profile-by-mmsi-no",
+      "question": "Hva slags fartøy er MMSI 259876543, og hvor befinner det seg nå?",
+      "language": "no",
+      "expectedTool": "get_vessel_profile",
+      "mustNotSelect": ["get_vessel_track", "search_fishing_vessels"],
+      "reason": "An MMSI is an AIS identifier, so the cross-provider vessel profile answers it; the fishing register is not keyed on MMSI.",
+      "requiredArguments": { "mmsi": "259876543" }
+    },
+    {
+      "id": "vessel-track-history-en",
+      "question": "Where has MMSI 257123456 sailed over the last day?",
+      "language": "en",
+      "expectedTool": "get_vessel_track",
+      "mustNotSelect": ["get_vessel_profile", "get_live_vessel_positions"],
+      "reason": "Movement over time for one known vessel is the recorded track, not a single current position.",
+      "requiredArguments": { "mmsi": "257123456" }
+    },
+    {
+      "id": "vessel-track-window-no",
+      "question": "Vis ruten til fartøyet med MMSI 257123456 mellom 20. og 22. juli.",
+      "language": "no",
+      "expectedTool": "get_vessel_track",
+      "mustNotSelect": ["get_vessel_profile"],
+      "reason": "An explicit past window over one vessel's positions is exactly what the track tool bounds.",
+      "requiredArguments": {
+        "mmsi": "257123456",
+        "from": "2026-07-20T00:00:00Z",
+        "to": "2026-07-22T00:00:00Z"
+      }
+    },
+    {
+      "id": "live-positions-area-en",
+      "question": "What ships are moving in the Trondheimsfjord right now?",
+      "language": "en",
+      "expectedTool": "get_live_vessel_positions",
+      "mustNotSelect": ["get_vessel_track", "get_vessel_profile"],
+      "reason": "An area question about current traffic, with no vessel identified, is the bounded live sample.",
+      "requiredArguments": {
+        "boundingBox": { "south": 63.3, "west": 10.2, "north": 63.6, "east": 10.7 },
+        "limit": 25,
+        "timeoutMs": 5000
+      },
+      "expectedClarification": "A bounding box, a result limit and a timeout are all required; the result is a short sample of a live feed, not a complete census of the area."
+    },
+    {
+      "id": "live-positions-area-no",
+      "question": "Hvilke fartøy er i havneområdet i Bergen akkurat nå?",
+      "language": "no",
+      "expectedTool": "get_live_vessel_positions",
+      "mustNotSelect": ["search_fishing_vessels", "get_vessel_profile"],
+      "reason": "Current presence in a geographic area comes from the live AIS feed, not from a static register.",
+      "requiredArguments": {
+        "boundingBox": { "south": 60.35, "west": 5.25, "north": 60.45, "east": 5.4 },
+        "limit": 20,
+        "timeoutMs": 4000
+      }
+    },
+    {
+      "id": "fishing-vessel-search-municipality-no",
+      "question": "Hvilke fiskefartøy er registrert i Stavanger kommune?",
+      "language": "no",
+      "expectedTool": "search_fishing_vessels",
+      "mustNotSelect": ["get_fishing_vessel", "search_norwegian_companies"],
+      "reason": "A filtered list from the fishing-vessel register, with no single exact identifier in hand.",
+      "requiredArguments": { "municipalityCode": "1103" }
+    },
+    {
+      "id": "fishing-vessel-search-by-size-en",
+      "question": "Which registered Norwegian fishing vessels are longer than 30 metres?",
+      "language": "en",
+      "expectedTool": "search_fishing_vessels",
+      "mustNotSelect": ["get_fishing_vessel", "get_vessel_profile"],
+      "reason": "A size filter over the register returns many vessels, so it is a search rather than a lookup.",
+      "requiredArguments": { "minLength": 30 }
+    },
+    {
+      "id": "fishing-vessel-by-callsign-en",
+      "question": "Look up the fishing vessel with call sign LDMV.",
+      "language": "en",
+      "expectedTool": "get_fishing_vessel",
+      "mustNotSelect": ["search_fishing_vessels", "get_vessel_profile"],
+      "reason": "One exact identifier is present, so exactly one register record is being asked for.",
+      "requiredArguments": { "radioCallSign": "LDMV" }
+    },
+    {
+      "id": "fishing-vessel-by-mark-no",
+      "question": "Hvilket fartøy har registreringsmerke R-62-H?",
+      "language": "no",
+      "expectedTool": "get_fishing_vessel",
+      "mustNotSelect": ["search_fishing_vessels"],
+      "reason": "A registration mark is an exact-match identifier in the register.",
+      "requiredArguments": { "registrationMark": "R-62-H" }
+    },
+    {
+      "id": "aquaculture-search-municipality-no",
+      "question": "Hvilke oppdrettsanlegg ligger i Heim kommune?",
+      "language": "no",
+      "expectedTool": "search_aquaculture_locations",
+      "mustNotSelect": ["get_aquaculture_location", "search_norwegian_companies"],
+      "reason": "Discovering sites by area is a search; no site number is known yet.",
+      "requiredArguments": { "municipalityCode": "5055" }
+    },
+    {
+      "id": "aquaculture-search-by-holder-en",
+      "question": "Which fish farm sites does the company with organization number 912345678 hold?",
+      "language": "en",
+      "expectedTool": "search_aquaculture_locations",
+      "mustNotSelect": ["search_norwegian_companies", "get_aquaculture_location"],
+      "reason": "The licence holder is the filter and the answer is a list of sites, not company registry details.",
+      "requiredArguments": { "organizationNumber": "912345678" }
+    },
+    {
+      "id": "aquaculture-site-by-number-en",
+      "question": "What is aquaculture site 10318 and how much biomass is it permitted?",
+      "language": "en",
+      "expectedTool": "get_aquaculture_location",
+      "mustNotSelect": ["search_aquaculture_locations"],
+      "reason": "An exact site number is present, so exactly one site is being asked for.",
+      "requiredArguments": { "siteNumber": "10318" }
+    },
+    {
+      "id": "aquaculture-site-status-no",
+      "question": "Hva er produksjonsområdestatusen for lokalitet 10318?",
+      "language": "no",
+      "expectedTool": "get_aquaculture_location",
+      "mustNotSelect": ["search_aquaculture_locations"],
+      "reason": "A single known site number, asking for a field the site record carries.",
+      "requiredArguments": { "siteNumber": "10318" }
+    },
+    {
+      "id": "marine-forecast-waves-en",
+      "question": "How high are the waves off Hitra right now?",
+      "language": "en",
+      "expectedTool": "get_marine_forecast",
+      "mustNotSelect": ["get_norwegian_weather_forecast", "get_current_norwegian_hazards"],
+      "reason": "Wave height is sea state from the BarentsWatch marine models, not an atmospheric forecast from MET Norway.",
+      "requiredArguments": { "latitude": 63.74, "longitude": 9.22 }
+    },
+    {
+      "id": "marine-forecast-current-no",
+      "question": "Hvor sterk er havstrømmen ved 63.74, 9.22?",
+      "language": "no",
+      "expectedTool": "get_marine_forecast",
+      "mustNotSelect": ["get_norwegian_weather_forecast"],
+      "reason": "Sea current is a marine model product; the MET forecast carries wind, not water movement.",
+      "requiredArguments": { "latitude": 63.74, "longitude": 9.22, "include": ["current"] }
     }
   ]
 }

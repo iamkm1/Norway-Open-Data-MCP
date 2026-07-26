@@ -15,9 +15,10 @@ Nothing else is contacted. There is no intermediate service, no proxy and no
 analytics endpoint owned by this project.
 
 The public-data providers you query — Brønnøysundregistrene, Kartverket, MET
-Norway, NVE, SSB, SSB Klass, FHI, Entur, Statens vegvesen, Hva koster strømmen?
-— receive a direct HTTPS request from your machine, exactly as if you had opened
-their website. They can see:
+Norway, NVE, SSB, SSB Klass, FHI, Entur, Statens vegvesen, Hva koster strømmen?,
+BarentsWatch, BarentsWatch AIS and Fiskeridirektoratet — receive a direct HTTPS
+request from your machine, exactly as if you had opened their website. They can
+see:
 
 - your IP address;
 - the caller identity you configured (`NORWAY_MCP_APP_NAME`, and
@@ -59,24 +60,50 @@ it, at the cost of more provider requests.
 
 ## Credentials
 
-The only credentials this server accepts are `NORWAY_MCP_CONTACT_EMAIL` (an
-identity MET Norway requires, not a secret) and `NORWAY_MCP_NVE_API_KEY` (a free
-key that no shipped tool currently uses). The SSB Klass tools add **no** new
-credential or environment variable: Klass is anonymous.
+This server accepts credentials from **environment variables only**. There is no
+credential file, no keychain integration, no prompt and no other input path — a
+tool argument can never supply one.
 
-Both are:
+| Variable                                    | What it is                                     |
+| ------------------------------------------- | ---------------------------------------------- |
+| `NORWAY_MCP_CONTACT_EMAIL`                  | An identity MET Norway requires, not a secret  |
+| `NORWAY_MCP_NVE_API_KEY`                    | A free key that no shipped tool currently uses |
+| `NORWAY_MCP_BARENTSWATCH_CLIENT_ID`         | OAuth2 client id, BarentsWatch `api` scope     |
+| `NORWAY_MCP_BARENTSWATCH_CLIENT_SECRET`     | OAuth2 client secret, BarentsWatch `api` scope |
+| `NORWAY_MCP_BARENTSWATCH_AIS_CLIENT_ID`     | OAuth2 client id, BarentsWatch `ais` scope     |
+| `NORWAY_MCP_BARENTSWATCH_AIS_CLIENT_SECRET` | OAuth2 client secret, BarentsWatch `ais` scope |
+
+The SSB Klass tools and both Fiskeridirektoratet registers add **no** credential
+at all: they are anonymous.
+
+Every one of them is:
 
 - read once at startup from the environment;
-- passed to the SDK, which sends them only to the provider that requires them;
+- passed to the SDK, which sends each only to the provider that requires it —
+  the two BarentsWatch scopes are separate, so an `ais` secret is never sent to
+  the `api` host or the reverse;
 - **redacted by value** from every tool result, every error message and every
   log line, so they cannot leak through an error path.
 
-Credential-shaped patterns (`Authorization`, `x-api-key`, cookies) are stripped
-even when this process never held the value, and local filesystem paths are
-removed from all output. Stack traces are never returned to a client.
+Client ids are redacted alongside secrets. A client id is not a password, but it
+identifies a registered client and has no place in a tool result.
 
-`--doctor` masks the configured email (`o***n@example.com`) and never prints the
-API key at all.
+### OAuth2 tokens
+
+The client-credentials exchange is **entirely the SDK's**. This server hands the
+configured values over once at construction and never sees a token. The SDK
+holds tokens in memory per instance, refreshes them before expiry, discards one
+the provider rejects with HTTP 401, and — per its own documentation — never
+writes them to the response cache or any persistent store. There is no hosted
+proxy. Nothing token-related is written to disk by anything in this stack.
+
+Credential-shaped patterns (`Authorization: Bearer …`, `x-api-key`, cookies) are
+stripped even when this process never held the value, which is what catches a
+token echoed back inside a provider error message. Local filesystem paths are
+removed from all output, and stack traces are never returned to a client.
+
+`--doctor` masks the configured email (`o***n@example.com`) and prints every key,
+id and secret as `(set, masked)` — never the value.
 
 ## Logging
 
@@ -99,6 +126,26 @@ numbers, no role-holder personal data, no Maskinporten-protected endpoints, and
 no suppressed health values — FHI suppression flags are preserved and never
 reconstructed.
 
+## Maritime data specifically
+
+- **No private vessel-owner information is returned.** Fiskeridirektoratet's
+  vessel register publishes owners including natural persons. The SDK already
+  withholds their name, postal code and town; this server additionally projects
+  owners field by field rather than copying the record, so a future provider or
+  SDK change could not leak a person's details through a spread. Private owners
+  are reported as a count and nothing more. Anyone who genuinely needs those
+  fields should read them from Fiskeridirektoratet directly, under that agency's
+  own terms.
+- **Vessel positions are public AIS safety broadcasts**, transmitted by the
+  vessel itself and published by Kystverket through BarentsWatch. They are not
+  tracking of people, and no tool here associates a position with an individual.
+- **The live feed is bounded, not subscribed to.** `get_live_vessel_positions`
+  holds a connection for at most 15 seconds, requires an explicit bounding box
+  and result limit, closes on every exit path, and stores nothing. There is no
+  background polling and no long-lived connection anywhere in this server.
+- **Nothing maritime is retained.** Like every other tool, results exist only in
+  the response and in the optional in-memory cache, which dies with the process.
+
 ## Verifying these claims
 
 These are testable properties, not promises:
@@ -107,6 +154,12 @@ These are testable properties, not promises:
   loaded, no server handle is opened, and only three runtime dependencies exist.
 - `tests/unit/errors.test.ts` feeds configured secrets through every output path
   and asserts they never appear.
+- `tests/unit/maritime-tools.test.ts` asserts that a client secret echoed back
+  inside a provider error is redacted, that a bearer token is stripped, and that
+  no natural-person owner field ever reaches a result.
+- `tests/unit/live-vessel-positions.test.ts` asserts the AIS stream is released
+  on every exit path — limit, timeout, cancellation and provider error — so no
+  connection outlives a tool call.
 - `tests/integration/protocol.test.ts` asserts every byte on stdout is a
   JSON-RPC frame.
 - `scripts/check-stdout.ts` statically rejects `console.*`, direct `fetch`, HTTP

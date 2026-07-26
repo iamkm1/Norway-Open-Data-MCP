@@ -6,7 +6,7 @@
  * asserts these constants match the manifest, so they cannot drift.
  */
 export const PACKAGE_NAME = "norway-open-data-mcp";
-export const PACKAGE_VERSION = "0.3.0";
+export const PACKAGE_VERSION = "0.4.0";
 
 /** Default caller identity sent to providers that require identification. */
 export const DEFAULT_APPLICATION_NAME = `${PACKAGE_NAME}/${PACKAGE_VERSION}`;

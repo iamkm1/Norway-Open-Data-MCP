@@ -224,6 +224,65 @@ describe("MCP client over a spawned subprocess", () => {
     expect(tools).toHaveLength(EXPECTED_TOOL_COUNT);
   });
 
+  it("advertises all eight geospatial tools with strict schemas over stdio", async () => {
+    const { tools } = await client.listTools();
+    const byName = new Map(tools.map((tool) => [tool.name, tool]));
+
+    for (const name of [
+      "search_geonorge_datasets",
+      "get_geonorge_metadata",
+      "get_protected_areas_at",
+      "search_protected_areas",
+      "get_nature_types_at",
+      "get_intervention_free_nature_at",
+      "get_land_resources_at",
+      "get_nature_profile",
+    ]) {
+      const tool = byName.get(name);
+      expect(tool, name).toBeDefined();
+      expect(tool!.inputSchema.additionalProperties, name).toBe(false);
+      expect(tool!.outputSchema, name).toBeDefined();
+      expect(tool!.annotations?.readOnlyHint, name).toBe(true);
+    }
+  });
+
+  it("rejects an out-of-range or unbounded geospatial request before any provider is reached", async () => {
+    for (const [name, args] of [
+      // Impossible coordinates.
+      ["get_protected_areas_at", { latitude: 95, longitude: 8.1 }],
+      ["get_nature_types_at", { latitude: 61.1, longitude: 8.1, limit: 500 }],
+      // Inverted box.
+      [
+        "search_protected_areas",
+        { boundingBox: { south: 61.2, west: 8.0, north: 61.0, east: 8.4 } },
+      ],
+      // A box far larger than this server's span cap.
+      ["search_protected_areas", { boundingBox: { south: 58, west: 4, north: 71, east: 31 } }],
+      // An unfiltered catalogue walk.
+      ["search_geonorge_datasets", {}],
+      // A URL where a catalogue identifier belongs.
+      ["get_geonorge_metadata", { id: "https://kart.example.no/geoserver/wfs" }],
+    ] as [string, Record<string, unknown>][]) {
+      const result = await client.callTool({ name, arguments: args });
+      expect(result.isError, `${name} ${JSON.stringify(args)}`).toBe(true);
+    }
+  });
+
+  it("routes a credential-free geospatial request to its handler and stays alive", async () => {
+    // Naturbase is anonymous, so a well-formed request needs no configuration.
+    // CI may or may not have network: a success or a clean provider error are
+    // both acceptable. What must hold is a well-formed MCP result and a session
+    // that keeps serving afterwards.
+    const result = await client.callTool({
+      name: "get_protected_areas_at",
+      arguments: { latitude: 61.1, longitude: 8.1, limit: 1 },
+    });
+
+    expect(result).toHaveProperty("content");
+    const { tools } = await client.listTools();
+    expect(tools).toHaveLength(EXPECTED_TOOL_COUNT);
+  });
+
   it("keeps serving requests after an error", async () => {
     await client.callTool({ name: "search_norwegian_companies", arguments: { limit: -1 } });
     const { tools } = await client.listTools();
@@ -399,7 +458,7 @@ describe("CLI modes exit before any transport starts", () => {
   it("--doctor reports readiness and exits zero", async () => {
     const result = await run(["--doctor"]);
     expect(result.code).toBe(0);
-    expect(result.stdout).toContain("Tools (20)");
+    expect(result.stdout).toContain(`Tools (${String(EXPECTED_TOOL_COUNT)})`);
     expect(result.stdout).toContain("No network requests were made");
   });
 

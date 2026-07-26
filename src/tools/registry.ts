@@ -30,6 +30,14 @@ import { fishingVesselTool } from "./fishing-vessel.js";
 import { searchAquacultureLocationsTool } from "./search-aquaculture-locations.js";
 import { aquacultureLocationTool } from "./aquaculture-location.js";
 import { marineForecastTool } from "./marine-forecast.js";
+import { searchGeonorgeDatasetsTool } from "./search-geonorge-datasets.js";
+import { geonorgeMetadataTool } from "./geonorge-metadata.js";
+import { protectedAreasAtTool } from "./protected-areas-at.js";
+import { searchProtectedAreasTool } from "./search-protected-areas.js";
+import { natureTypesAtTool } from "./nature-types-at.js";
+import { interventionFreeNatureAtTool } from "./intervention-free-nature-at.js";
+import { landResourcesAtTool } from "./land-resources-at.js";
+import { natureProfileTool } from "./nature-profile.js";
 import type { AnyToolDefinition } from "./types.js";
 
 export const allTools: readonly AnyToolDefinition[] = [
@@ -55,7 +63,47 @@ export const allTools: readonly AnyToolDefinition[] = [
   searchAquacultureLocationsTool,
   aquacultureLocationTool,
   marineForecastTool,
+  // Geospatial. Appended for the same reason the maritime block was: the
+  // twenty tools every existing client already sees keep their names and their
+  // positions in `tools/list`.
+  searchGeonorgeDatasetsTool,
+  geonorgeMetadataTool,
+  protectedAreasAtTool,
+  searchProtectedAreasTool,
+  natureTypesAtTool,
+  interventionFreeNatureAtTool,
+  landResourcesAtTool,
+  natureProfileTool,
 ];
 
-/** Guards the documented contract that this server exposes exactly twenty tools. */
-export const EXPECTED_TOOL_COUNT = 20;
+/** Guards the documented contract that this server exposes exactly this many tools. */
+export const EXPECTED_TOOL_COUNT = 28;
+
+/**
+ * The tools that shipped before the geospatial release, in their exact order.
+ *
+ * Existing clients depend on this prefix of `tools/list` being stable, so it is
+ * asserted rather than assumed. See tests/unit/server-contract.test.ts.
+ */
+export const PRE_GEOSPATIAL_TOOL_ORDER: readonly string[] = [
+  "search_norwegian_companies",
+  "get_norwegian_company_profile",
+  "search_norwegian_addresses",
+  "get_norwegian_location_profile",
+  "get_norwegian_municipality_profile",
+  "get_norwegian_weather_forecast",
+  "get_current_norwegian_hazards",
+  "get_norwegian_electricity_prices",
+  "get_norwegian_transport_departures",
+  "query_norwegian_statistics",
+  "resolve_norwegian_administrative_code",
+  "search_norwegian_classification_codes",
+  "get_vessel_profile",
+  "get_vessel_track",
+  "get_live_vessel_positions",
+  "search_fishing_vessels",
+  "get_fishing_vessel",
+  "search_aquaculture_locations",
+  "get_aquaculture_location",
+  "get_marine_forecast",
+];

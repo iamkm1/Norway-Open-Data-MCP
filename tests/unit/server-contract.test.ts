@@ -8,7 +8,11 @@ import { readFileSync } from "node:fs";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { createHarness, type Harness } from "../helpers/harness.js";
-import { EXPECTED_TOOL_COUNT, allTools } from "../../src/tools/registry.js";
+import {
+  EXPECTED_TOOL_COUNT,
+  PRE_GEOSPATIAL_TOOL_ORDER,
+  allTools,
+} from "../../src/tools/registry.js";
 import { PACKAGE_NAME, PACKAGE_VERSION } from "../../src/version.js";
 import { installStdoutGuard } from "../../src/server/stdout-guard.js";
 import { createLogger } from "../../src/logging/logger.js";
@@ -35,7 +39,81 @@ describe("tool registry", () => {
 
     expect(tools).toHaveLength(EXPECTED_TOOL_COUNT);
     expect(allTools).toHaveLength(EXPECTED_TOOL_COUNT);
-    expect(EXPECTED_TOOL_COUNT).toBe(20);
+    expect(EXPECTED_TOOL_COUNT).toBe(28);
+  });
+
+  it("keeps the twenty pre-geospatial tools in their published order", async () => {
+    // `tools/list` order is part of the contract clients already see. The eight
+    // geospatial tools are appended, so nothing an existing client indexed by
+    // position can move.
+    harness = await createHarness({ sdk: createFakeSdk() });
+    const { tools } = await harness.client.listTools();
+    const names = tools.map((tool) => tool.name);
+
+    expect(names.slice(0, PRE_GEOSPATIAL_TOOL_ORDER.length)).toEqual([
+      ...PRE_GEOSPATIAL_TOOL_ORDER,
+    ]);
+    expect(allTools.slice(0, PRE_GEOSPATIAL_TOOL_ORDER.length).map((tool) => tool.name)).toEqual([
+      ...PRE_GEOSPATIAL_TOOL_ORDER,
+    ]);
+  });
+
+  it("registers the eight geospatial tools exactly once each, after the existing set", async () => {
+    harness = await createHarness({ sdk: createFakeSdk() });
+    const { tools } = await harness.client.listTools();
+    const names = tools.map((tool) => tool.name);
+
+    const geospatial = [
+      "search_geonorge_datasets",
+      "get_geonorge_metadata",
+      "get_protected_areas_at",
+      "search_protected_areas",
+      "get_nature_types_at",
+      "get_intervention_free_nature_at",
+      "get_land_resources_at",
+      "get_nature_profile",
+    ];
+
+    expect(names.slice(PRE_GEOSPATIAL_TOOL_ORDER.length)).toEqual(geospatial);
+    for (const name of geospatial) {
+      expect(
+        names.filter((entry) => entry === name),
+        name,
+      ).toHaveLength(1);
+    }
+  });
+
+  it("exposes the geodata, environment and land namespaces on the injectable SDK surface", () => {
+    const sdk = createFakeSdk();
+    expect(typeof sdk.geodata.searchDatasets).toBe("function");
+    expect(typeof sdk.geodata.getMetadata).toBe("function");
+    expect(typeof sdk.environment.getProtectedAreasAt).toBe("function");
+    expect(typeof sdk.environment.searchProtectedAreas).toBe("function");
+    expect(typeof sdk.environment.getProposedProtectedAreasAt).toBe("function");
+    expect(typeof sdk.environment.getNatureTypesAt).toBe("function");
+    expect(typeof sdk.environment.getInterventionFreeAreasAt).toBe("function");
+    expect(typeof sdk.land.getLandResourcesAt).toBe("function");
+    expect(typeof sdk.profiles.natureAtLocation).toBe("function");
+  });
+
+  it("exposes no tool that accepts a caller-supplied service URL", async () => {
+    // The SDK deliberately is not a GIS proxy, and neither is this server. A
+    // generic WFS/ArcGIS/OGC passthrough would arrive as an input property
+    // named for a location, so the whole advertised schema surface is checked.
+    harness = await createHarness({ sdk: createFakeSdk() });
+    const { tools } = await harness.client.listTools();
+
+    for (const tool of tools) {
+      const properties = Object.keys(
+        (tool.inputSchema.properties as Record<string, unknown> | undefined) ?? {},
+      );
+      for (const property of properties) {
+        expect(
+          /url|uri|endpoint|host|service|wfs|wms|ogc|arcgis|typename|layer/i.test(property),
+          `${tool.name} exposes a location-shaped input property "${property}"`,
+        ).toBe(false);
+      }
+    }
   });
 
   it("registers the two SSB Klass tools exactly once, without disturbing the existing set", async () => {
@@ -285,7 +363,7 @@ describe("doctor", () => {
 
     const text = report.lines.join("\n");
     expect(report.exitCode).toBe(0);
-    expect(text).toContain("Tools (20)");
+    expect(text).toContain(`Tools (${String(EXPECTED_TOOL_COUNT)})`);
     expect(text).toContain("get_norwegian_weather_forecast: needs NORWAY_MCP_CONTACT_EMAIL");
     // SSB Klass tools need no configuration and are ready even with an empty env.
     expect(text).toContain("resolve_norwegian_administrative_code: ready");
@@ -293,6 +371,10 @@ describe("doctor", () => {
     // The Fiskeridirektoratet registers are open and need no credentials either.
     expect(text).toContain("search_fishing_vessels: ready");
     expect(text).toContain("get_aquaculture_location: ready");
+    // Geonorge, Naturbase and NIBIO are anonymous: no new variable was added.
+    expect(text).toContain("search_geonorge_datasets: ready");
+    expect(text).toContain("get_protected_areas_at: ready");
+    expect(text).toContain("get_nature_profile: ready");
     // The BarentsWatch tools name both variables they need.
     expect(text).toContain(
       "get_vessel_profile: needs NORWAY_MCP_BARENTSWATCH_AIS_CLIENT_ID, NORWAY_MCP_BARENTSWATCH_AIS_CLIENT_SECRET",

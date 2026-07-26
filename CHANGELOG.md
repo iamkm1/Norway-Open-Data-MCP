@@ -4,6 +4,149 @@ All notable changes to this project are documented here. This project follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html); see the versioning
 policy in the README for what "breaking" means before 1.0.
 
+## 0.4.0 — 2026-07-26
+
+Adds a curated geospatial toolset built on the new `geodata`, `environment` and
+`land` namespaces and `profiles.natureAtLocation()` in
+`norway-open-data-sdk@0.8.0`. The curated tool set grows from 20 to 28. **No
+existing tool changes its name, input schema or data payload, and the first
+twenty entries of `tools/list` keep their names and their order** — the eight new
+tools are appended, and a test now pins that prefix rather than assuming it.
+
+The geospatial release adds **no new environment variable and no credential of
+any kind**: Geonorge, Naturbase and NIBIO are all anonymous. Twenty-three of the
+twenty-eight tools now work with no configuration at all.
+
+**One existing behaviour changes**, and it is a fix rather than a feature:
+provenance is now keyed on a provider's licence terms as well as its id, so one
+provider publishing two sets of terms no longer loses one of them. See _Fixed_.
+
+### Added
+
+- Two Geonorge catalogue tools, both anonymous:
+  - `search_geonorge_datasets` — discover which Norwegian geodata exists, and
+    whose, by free text, publishing organization or theme. Bounded and paged; an
+    unfiltered walk of the national catalogue is refused.
+  - `get_geonorge_metadata` — the full record for one catalogue identifier:
+    licence, use limitations, geographic extent, coordinate reference systems,
+    update regime and the endpoints its publisher advertises. Contacts are
+    reduced to the responsible organization and role; the named individuals and
+    e-mail addresses Geonorge publishes are not relayed.
+- Five Naturbase and NIBIO tools, all anonymous:
+  - `get_protected_areas_at` — which conservation areas legally cover one WGS84
+    coordinate, with protection form, IUCN category, managing authority and the
+    Lovdata regulation. `includeProposed` adds areas only proposed for
+    protection, queried independently so a proposal-layer outage cannot destroy
+    the legal-protection answer.
+  - `search_protected_areas` — conservation areas intersecting a bounded
+    rectangle.
+  - `get_nature_types_at` — mapped NiN nature localities of national importance,
+    with condition, biodiversity value and red-list status.
+  - `get_intervention_free_nature_at` — the January 2023 intervention-free
+    (INON) wilderness-distance zones.
+  - `get_land_resources_at` — NIBIO's generalized AR50 land-resource
+    classification.
+- `get_nature_profile` — the headline tool. Answers one coordinate from
+  Miljødirektoratet, NIBIO and Kartverket at once by delegating the whole
+  composition to the SDK's `profiles.natureAtLocation()`: protected and proposed
+  conservation areas, nature localities, intervention-free status, AR50 land
+  classes, and the nearest official place name with its municipality. Every
+  section reports its own provider, licence, retrieval time and why it is present
+  or absent, and **one provider failing costs only its own section** — the rest
+  are returned, with the failure in `components`, the SDK's own message preserved
+  verbatim in the warnings, and the section named in `partial.missing`.
+- **Geometry, returned whole or not at all.** Every geospatial tool takes
+  `includeGeometry` (default `false`). When set, GeoJSON arrives exactly as the
+  provider published it: every interior ring of a polygon and every part of a
+  multipolygon survives. When a geometry does not fit, it is dropped **whole**
+  and recorded in `truncation` — never simplified, never stripped of its holes,
+  never reduced to its largest part. `geometrySummary` is present either way and
+  always reports part count, hole count and vertex count, so a caller can tell
+  that an area has holes even when the coordinates were too large to send.
+- **Bounded by construction.** Every search takes a limit and reports
+  `truncated` / `hasMore` from the SDK rather than inferring it; bounding boxes
+  are capped at 2° × 4°; provider requests per tool call are capped; and a
+  `nextOffset` continuation is offered when the provider held more. No tool can
+  download a national dataset.
+- Two new caveats carried on every relevant result, in both the structured
+  warnings and the rendered text: **an empty nature result is never an
+  environmental clearance** (these are four selected Naturbase datasets, not a
+  register of everything of environmental value, and survey coverage is uneven),
+  and **coordinates are WGS84 degrees that neither the SDK nor this server
+  reprojects**.
+- `PRE_GEOSPATIAL_TOOL_ORDER` in `src/tools/registry.ts`, so the twenty-tool
+  prefix of `tools/list` is asserted rather than assumed.
+- Fake-SDK fixtures for the new surface in `src/testing/fake-sdk.ts`: the
+  `geodata`, `environment` and `land` namespaces, `profiles.natureAtLocation`,
+  feature-result builders, a polygon **with a hole**, a multipolygon whose second
+  part also has a hole, a null-geometry feature, an oversized geometry, and
+  complete and degraded nature profiles. The intervention-free source fixture
+  deliberately carries the layer's own licence and wording under the shared
+  `naturbase` id, so an attribution regression cannot pass the offline suite.
+
+### Changed
+
+- `norway-open-data-sdk` requirement raised to `^0.8.0`, with the version floor
+  test updated to match. The floor rises because the geospatial tools call
+  namespaces that do not exist on 0.7.0.
+- `EXPECTED_TOOL_COUNT` is 28. `--doctor` reports `Tools (28)`, all eight new
+  tools `ready`.
+- Documentation: README tool catalogue, capability matrix, tool catalogue, test
+  plan, architecture, privacy notes and Inspector checklist all cover the new
+  surface, its dataset scope, its limits and why a generic map-service tool is
+  deliberately absent.
+- **Added a root `.gitattributes` declaring `* text=auto eol=lf`.** Without it, a
+  clone on a machine with `core.autocrlf=true` checked out CRLF working files
+  while Prettier is configured for LF, so `pnpm format:check` — and therefore
+  `pnpm verify` — failed on a completely untouched checkout until `pnpm format`
+  was run. Committed blobs were already LF, so tracked content is unchanged; only
+  what git writes to disk on checkout is now consistent for every contributor.
+
+### Fixed
+
+- **Provenance no longer collapses two sets of terms into one.** `mergeProvenance`
+  de-duplicated sources by provider id. `norway-open-data-sdk@0.8.0` returns the
+  Naturbase intervention-free layer under the same `naturbase` id as the other
+  Naturbase layers but with its own licence version (NLOD 1.0) and its own
+  required wording (`Miljødirektoratet - inngrepsfri natur 01.2023`), so keying on
+  the id kept whichever arrived first and silently dropped the other's terms.
+  De-duplication is now keyed on the licence and attribution as well as the id.
+  For every provider whose id maps to one set of terms — every other provider —
+  behaviour is unchanged.
+- **Profile provenance now unions the SDK's `sources` array.** 0.8.0 added
+  `OpenDataResponse.sources`, the SDK's own list of every real provider that
+  contributed to a composition. Provenance is still built from `components` first,
+  because only those carry a per-operation `retrievedAt` and `cached`, but any
+  entry in `sources` that no available component accounts for is now added too, so
+  a provider the SDK credits cannot be dropped by this layer. The four existing
+  profile tools are unaffected in output: their `sources` is derived from the same
+  components.
+
+### Notes on provider behaviour
+
+- **`get_intervention_free_nature_at` and `get_nature_profile` require a limit of
+  at least 2.** The SDK derives its upstream page size from the remaining limit,
+  so a limit of 1 asks Miljødirektoratet's intervention-free WFS for `COUNT=1` —
+  and whenever that request would match a zone, the service answers with a page
+  the SDK rejects as invalid. Verified live against SDK 0.8.0, deterministic, and
+  specific to that layer; the ArcGIS-backed Naturbase layers answer a limit of 1
+  without trouble. Refusing the one input known to break is a schema decision;
+  rewriting the caller's limit silently would answer a different question from the
+  one asked.
+- **`pageSize` is deliberately not forwarded to the SDK.** An earlier draft passed
+  the caller's limit as the provider page size, which made the same WFS return a
+  page the SDK rejected. The MCP layer bounds what it returns, not how the SDK
+  talks to a provider. A test pins this.
+
+### Verification
+
+Full chain green: format check, ESLint, `tsc --noEmit`, stdout audit, 464 unit
+and evaluation tests with coverage thresholds enforced, build, 29 protocol
+integration tests over real stdio, package smoke test (`npm pack` → install
+outside the repository → drive the installed binary), `--doctor`, and 29 opt-in
+live tests against the real Geonorge, Naturbase, NIBIO and existing providers.
+No threshold was lowered and no test was removed or skipped.
+
 ## 0.3.0 — 2026-07-26
 
 Adds a curated maritime toolset built on the new `ais`, `marine` and `fisheries`

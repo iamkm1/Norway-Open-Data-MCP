@@ -146,6 +146,28 @@ reconstructed.
 - **Nothing maritime is retained.** Like every other tool, results exist only in
   the response and in the optional in-memory cache, which dies with the process.
 
+## Geospatial data specifically
+
+- **Coordinates you send are query inputs, not location tracking.** A coordinate
+  reaches Miljødirektoratet, NIBIO or Kartverket as part of a spatial query, in
+  the same way an address reaches Kartverket today. Nothing associates it with
+  you beyond the IP address and caller identity every request already carries,
+  and nothing is retained.
+- **Geonorge contact people are not relayed.** The catalogue publishes named
+  individuals with e-mail addresses for many records. `get_geonorge_metadata`
+  projects contacts down to the responsible **organization and role**; the name
+  and address are dropped, so no personal data from the catalogue reaches a
+  result or a model's context.
+- **The environmental datasets contain no personal data.** Protected areas,
+  proposed protected areas, NiN nature localities, intervention-free zones and
+  AR50 land cover describe land, not people. Survey metadata can name a
+  commissioning organization or contractor, which is organizational information
+  published by Miljødirektoratet as part of the record.
+- **No caller-supplied address is ever fetched.** No geospatial tool accepts a
+  URL, host or endpoint. The catalogue reports the endpoints a publisher
+  advertises, and this server never calls one — so a model cannot use these tools
+  to reach an arbitrary host.
+
 ## Verifying these claims
 
 These are testable properties, not promises:
@@ -160,6 +182,12 @@ These are testable properties, not promises:
 - `tests/unit/live-vessel-positions.test.ts` asserts the AIS stream is released
   on every exit path — limit, timeout, cancellation and provider error — so no
   connection outlives a tool call.
+- `tests/unit/geospatial-tools.test.ts` asserts that a named individual and
+  e-mail address in a Geonorge record appear nowhere in the serialized result.
+- `tests/unit/server-contract.test.ts` asserts that **no tool** advertises an
+  input property named like a URL, host, endpoint, service, WFS/WMS/OGC/ArcGIS
+  reference, type name or layer name — the structural guarantee that this server
+  cannot be used as a service proxy.
 - `tests/integration/protocol.test.ts` asserts every byte on stdout is a
   JSON-RPC frame.
 - `scripts/check-stdout.ts` statically rejects `console.*`, direct `fetch`, HTTP

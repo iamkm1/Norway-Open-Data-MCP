@@ -17,9 +17,11 @@ import type {
   HazardWarning,
   NorwegianAddress,
   OpenDataResponse,
+  OpenDataSource,
   ProfileComponent,
 } from "norway-open-data-sdk";
 
+import { provenanceKey } from "../../formatting/envelope.js";
 import type { TruncationTracker } from "../../limits/budget.js";
 
 export const HAZARD_DISCLAIMER =
@@ -111,39 +113,90 @@ export function projectHazard(
 }
 
 /**
- * Provenance for a composed profile, taken from its components.
+ * Provenance for a composed profile, taken from its components and its
+ * `sources` array — never from its synthetic top-level source.
  *
  * A profile's **top-level** `source` is a synthetic composite the SDK builds for
  * the composition itself — verified live against 0.7.0, `profiles.vessel()`
  * returns `barentswatch-ais+kartverket` with a homepage pointing at the SDK's
  * own repository and **no `license` and no `attribution` at all**. The other
- * three profiles do the same (`brreg+kartverket`, `kartverket+nve+vegvesen`,
- * `ssb+fhi+brreg+nve`).
+ * profiles do the same (`brreg+kartverket`, `kartverket+nve+vegvesen`,
+ * `ssb+fhi+brreg+nve`, `naturbase+nibio+kartverket`).
  *
  * Using it as the envelope's attribution silently drops every licence term the
  * providers require — including the BarentsWatch AIS condition that Kystverket
  * be credited. Each component carries the real provider descriptor, licence and
- * attribution intact, so provenance is built from those instead.
+ * attribution intact, so provenance is built from those first: a component also
+ * carries its own `retrievedAt` and `cached`, which the `sources` array does
+ * not.
+ *
+ * `norway-open-data-sdk@0.8.0` added `OpenDataResponse.sources`, the SDK's own
+ * list of every real provider that contributed. Any entry there that no
+ * available component already accounts for is added afterwards, carrying the
+ * response's timestamp, so a provider the SDK credits can never be dropped by
+ * this layer.
  *
  * Only components that actually returned data are credited: an omitted provider
- * supplied nothing and needs no attribution. When none did, the composite is
- * used as a last resort so the envelope still carries a timestamp.
+ * supplied nothing and needs no attribution. When neither source of provenance
+ * yields anything, the composite is used as a last resort so the envelope still
+ * carries a timestamp.
  */
 export function componentProvenance(
   response: OpenDataResponse<{ components?: readonly ProfileComponent[] }>,
 ): OpenDataResponse<unknown>[] {
-  const available = (response.data.components ?? []).filter(
-    (component) => component.status === "available",
+  const fromComponents = (response.data.components ?? [])
+    .filter((component) => component.status === "available")
+    .map((component) => ({
+      data: null,
+      source: component.source,
+      retrievedAt: component.retrievedAt,
+      cached: component.cached,
+    }));
+
+  const accounted = new Set(fromComponents.map((entry) => provenanceKey(entry.source)));
+  const fromSources = (response.sources ?? [])
+    .filter((source) => !accounted.has(provenanceKey(source)))
+    .map((source) => ({
+      data: null,
+      source,
+      retrievedAt: response.retrievedAt,
+      cached: response.cached,
+    }));
+
+  const merged = [...fromComponents, ...fromSources];
+  return merged.length === 0 ? [response] : merged;
+}
+
+/**
+ * The SDK's synthetic composite source, preserved as data rather than as
+ * attribution.
+ *
+ * It is genuine information — it names which providers the SDK composed and
+ * links its documentation for the composition — and dropping it entirely would
+ * lose that. It just must never stand in for the providers' own licences, so it
+ * travels in the payload while the envelope credits the real providers.
+ */
+export const compositeSourceSchema = z
+  .object({
+    id: z.string(),
+    name: z.string(),
+    homepage: z.string(),
+    documentation: z.string(),
+  })
+  .describe(
+    "The SDK's synthetic identity for this composition. Not a provider, and carries no licence: " +
+      "the real providers, their licences and their required attribution are in `sources`.",
   );
 
-  if (available.length === 0) return [response];
-
-  return available.map((component) => ({
-    data: null,
-    source: component.source,
-    retrievedAt: component.retrievedAt,
-    cached: component.cached,
-  }));
+export function projectCompositeSource(
+  source: OpenDataSource,
+): z.infer<typeof compositeSourceSchema> {
+  return {
+    id: source.id,
+    name: source.name,
+    homepage: source.homepage,
+    documentation: source.documentation,
+  };
 }
 
 export function projectComponents(

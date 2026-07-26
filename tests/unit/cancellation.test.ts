@@ -60,6 +60,16 @@ const ARGUMENTS: Record<string, Record<string, unknown>> = {
   search_aquaculture_locations: { municipalityCode: "5055" },
   get_aquaculture_location: { siteNumber: "10318" },
   get_marine_forecast: { latitude: 63.74, longitude: 9.22 },
+  search_geonorge_datasets: { query: "naturvern" },
+  get_geonorge_metadata: { id: "dd9d5e94-5b3d-4e46-9b3c-000000000001" },
+  get_protected_areas_at: { latitude: 61.1, longitude: 8.1 },
+  search_protected_areas: {
+    boundingBox: { south: 61.0, west: 8.0, north: 61.2, east: 8.4 },
+  },
+  get_nature_types_at: { latitude: 61.1, longitude: 8.1 },
+  get_intervention_free_nature_at: { latitude: 61.1, longitude: 8.1 },
+  get_land_resources_at: { latitude: 61.1, longitude: 8.1 },
+  get_nature_profile: { latitude: 61.1, longitude: 8.1 },
 };
 
 /** Credentials the maritime tools are gated on; values are never sent anywhere. */
@@ -93,7 +103,13 @@ function createSignalRecordingSdk(seen: AbortSignal[]): NorwayOpenDataLike {
 
   return createFakeSdk({
     companies: { search: hang },
-    profiles: { company: hang, address: hang, municipality: hang, vessel: hang },
+    profiles: {
+      company: hang,
+      address: hang,
+      municipality: hang,
+      vessel: hang,
+      natureAtLocation: hang,
+    },
     addresses: { search: hang },
     weather: { forecast: hang },
     hazards: {
@@ -147,6 +163,15 @@ function createSignalRecordingSdk(seen: AbortSignal[]): NorwayOpenDataLike {
       searchAquacultureSites: hang,
       getAquacultureSite: hang,
     },
+    geodata: { searchDatasets: hang, getMetadata: hang },
+    environment: {
+      getProtectedAreasAt: hang,
+      searchProtectedAreas: hang,
+      getProposedProtectedAreasAt: hang,
+      getNatureTypesAt: hang,
+      getInterventionFreeAreasAt: hang,
+    },
+    land: { getLandResourcesAt: hang },
   });
 }
 

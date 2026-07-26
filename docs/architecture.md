@@ -200,13 +200,14 @@ loudly if a future change introduces an HTTP path.
 | Test            | Vitest 4 | Native ESM + TS, v8 coverage, no transform config.                                                                                                                          |
 | Package manager | pnpm 11  | Strict node_modules layout catches undeclared-dependency bugs before publish.                                                                                               |
 
-## Why the tool count is 12, not one per SDK method
+## Why the tool count is 20, not one per SDK method
 
-The SDK exposes 55+ public methods across 15 namespaces — the `klass` namespace
-alone has 14. A server with one tool per method is unusable: tool descriptions
-are routing instructions, and an AI model given dozens of overlapping options
-routes worse than one given a dozen distinct ones. So SSB Klass is exposed as
-two curated tools, not fourteen. Selection criteria, in priority order:
+The SDK exposes 70+ public methods across 18 namespaces — the `klass` namespace
+alone has 14 and `ais` has 9. A server with one tool per method is unusable: tool
+descriptions are routing instructions, and an AI model given dozens of
+overlapping options routes worse than one given a curated set. So SSB Klass is
+exposed as two tools, not fourteen, and AIS as three, not nine. Selection
+criteria, in priority order:
 
 1. Answers a question a person actually asks about Norway.
 2. Distinct enough that a model can choose it without ambiguity.
@@ -217,9 +218,33 @@ two curated tools, not fourteen. Selection criteria, in priority order:
 Several tools are **compositions or routers**, not thin method wrappers:
 `get_norwegian_transport_departures` (autocomplete → departures),
 `get_current_norwegian_hazards` (three warning feeds → one filtered list),
-`query_norwegian_statistics` (metadata or data through one schema), and
+`query_norwegian_statistics` (metadata or data through one schema),
 `search_norwegian_classification_codes` (exact `getCode` vs. `searchCodes`
-pattern behind one contract).
+pattern behind one contract), `get_vessel_track` (last-24-hours endpoint vs.
+ranged query), and `get_marine_forecast` (two independent models merged with
+per-section failure handling).
+
+### The one streaming method, and why it is still a request/response tool
+
+`ais.streamPositions()` returns an endless `AsyncIterable`. MCP has no way to
+express that: a tool call is one request and one result, so a handler that
+awaited the stream's end would never resolve and would hold a provider
+connection open indefinitely.
+
+`get_live_vessel_positions` therefore takes a **bounded sample**, with three
+mandatory bounds because each alone is insufficient — a bounding box (how much
+sea is subscribed to), a result limit (a busy area would fill the output budget)
+and a timeout (a quiet area emits nothing at all, so no data-driven bound can
+end the call). The consumer `break`s out of the `for await` loop at the limit,
+which runs the iterator's `return()` and lets the SDK close the connection
+cleanly; a single `AbortController` — fed by the caller's signal and by the
+timeout — is aborted in a `finally` on every path as the backstop. Cancellation
+is detected by the caller's signal rather than by an error class, because the
+SDK surfaces an aborted request as a `ProviderError`.
+
+The result is honest about what it is: `stoppedBecause` names the bound that
+ended it, and a standing warning states that the sample is not a census of the
+area.
 
 See [tool-catalogue.md](tool-catalogue.md) for the full per-tool contract and
 [capability-matrix.md](capability-matrix.md) for every method that was

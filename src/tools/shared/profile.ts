@@ -16,6 +16,7 @@ import type {
   AddressHazardMatch,
   HazardWarning,
   NorwegianAddress,
+  OpenDataResponse,
   ProfileComponent,
 } from "norway-open-data-sdk";
 
@@ -109,6 +110,42 @@ export function projectHazard(
   };
 }
 
+/**
+ * Provenance for a composed profile, taken from its components.
+ *
+ * A profile's **top-level** `source` is a synthetic composite the SDK builds for
+ * the composition itself — verified live against 0.7.0, `profiles.vessel()`
+ * returns `barentswatch-ais+kartverket` with a homepage pointing at the SDK's
+ * own repository and **no `license` and no `attribution` at all**. The other
+ * three profiles do the same (`brreg+kartverket`, `kartverket+nve+vegvesen`,
+ * `ssb+fhi+brreg+nve`).
+ *
+ * Using it as the envelope's attribution silently drops every licence term the
+ * providers require — including the BarentsWatch AIS condition that Kystverket
+ * be credited. Each component carries the real provider descriptor, licence and
+ * attribution intact, so provenance is built from those instead.
+ *
+ * Only components that actually returned data are credited: an omitted provider
+ * supplied nothing and needs no attribution. When none did, the composite is
+ * used as a last resort so the envelope still carries a timestamp.
+ */
+export function componentProvenance(
+  response: OpenDataResponse<{ components?: readonly ProfileComponent[] }>,
+): OpenDataResponse<unknown>[] {
+  const available = (response.data.components ?? []).filter(
+    (component) => component.status === "available",
+  );
+
+  if (available.length === 0) return [response];
+
+  return available.map((component) => ({
+    data: null,
+    source: component.source,
+    retrievedAt: component.retrievedAt,
+    cached: component.cached,
+  }));
+}
+
 export function projectComponents(
   components: readonly ProfileComponent[] | undefined,
 ): ProjectedComponent[] {
@@ -155,6 +192,19 @@ export function componentWarnings(components: readonly ProjectedComponent[]): st
       case "missing-coordinate":
         warnings.push(
           `The "${component.section}" section was skipped because the resolved location has no coordinate.`,
+        );
+        break;
+      case "not-found":
+        // An ordinary, informative absence: the provider was searched and holds
+        // no matching record. Surfaced so a model does not read a missing
+        // section as a failure, but not treated as a partial result.
+        warnings.push(
+          `The "${component.section}" section is absent because ${component.provider} was searched and holds no matching record.`,
+        );
+        break;
+      case "not-covered":
+        warnings.push(
+          `The "${component.section}" section is absent because ${component.provider} answered but publishes nothing for this subject.`,
         );
         break;
       case "not-applicable":

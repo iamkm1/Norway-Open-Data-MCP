@@ -22,6 +22,14 @@ import { transportDeparturesTool } from "./transport-departures.js";
 import { statisticsTool } from "./statistics.js";
 import { resolveAdministrativeCodeTool } from "./resolve-administrative-code.js";
 import { searchClassificationCodesTool } from "./search-classification-codes.js";
+import { vesselProfileTool } from "./vessel-profile.js";
+import { vesselTrackTool } from "./vessel-track.js";
+import { liveVesselPositionsTool } from "./live-vessel-positions.js";
+import { searchFishingVesselsTool } from "./search-fishing-vessels.js";
+import { fishingVesselTool } from "./fishing-vessel.js";
+import { searchAquacultureLocationsTool } from "./search-aquaculture-locations.js";
+import { aquacultureLocationTool } from "./aquaculture-location.js";
+import { marineForecastTool } from "./marine-forecast.js";
 import type { AnyToolDefinition } from "./types.js";
 
 export const allTools: readonly AnyToolDefinition[] = [
@@ -37,7 +45,17 @@ export const allTools: readonly AnyToolDefinition[] = [
   statisticsTool,
   resolveAdministrativeCodeTool,
   searchClassificationCodesTool,
+  // Maritime. Appended rather than interleaved, so the order every existing
+  // client already sees in `tools/list` is unchanged.
+  vesselProfileTool,
+  vesselTrackTool,
+  liveVesselPositionsTool,
+  searchFishingVesselsTool,
+  fishingVesselTool,
+  searchAquacultureLocationsTool,
+  aquacultureLocationTool,
+  marineForecastTool,
 ];
 
-/** Guards the documented contract that this server exposes exactly twelve tools. */
-export const EXPECTED_TOOL_COUNT = 12;
+/** Guards the documented contract that this server exposes exactly twenty tools. */
+export const EXPECTED_TOOL_COUNT = 20;

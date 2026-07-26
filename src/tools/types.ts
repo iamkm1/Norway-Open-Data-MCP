@@ -12,6 +12,13 @@ import type {
   AddressProfile,
   AddressSearchParameters,
   AddressSearchResult,
+  AisPosition,
+  AisPositionStreamParameters,
+  AisTrack,
+  AisTrackParameters,
+  AquacultureSite,
+  AquacultureSiteSearchParameters,
+  AquacultureSiteSearchResult,
   AutocompleteParameters,
   AutocompletePlace,
   CompanyProfile,
@@ -22,6 +29,10 @@ import type {
   DepartureParameters,
   ElectricityPrice,
   ElectricityPriceParameters,
+  FisheriesVesselLookup,
+  FisheriesVesselSearchParameters,
+  FisheriesVesselSearchResult,
+  FishingVessel,
   ForecastParameters,
   HazardWarning,
   HazardWarningParameters,
@@ -31,12 +42,18 @@ import type {
   KlassResolveAdministrativeCodeParameters,
   KlassSearchCodesParameters,
   KlassSearchCodesResult,
+  MarineForecastParameters,
+  Mmsi,
   MunicipalityProfile,
   OpenDataResponse,
   RequestOptions,
+  SeaCurrentForecast,
   StatisticsQuery,
   StatisticsResult,
   StatisticsTableMetadata,
+  VesselProfile,
+  VesselProfileParameters,
+  WaveForecast,
   WeatherForecast,
 } from "norway-open-data-sdk";
 
@@ -62,6 +79,10 @@ export type NorwayOpenDataLike = {
       query: string,
       options?: RequestOptions,
     ): Promise<OpenDataResponse<MunicipalityProfile>>;
+    vessel(
+      parameters: VesselProfileParameters,
+      options?: RequestOptions,
+    ): Promise<OpenDataResponse<VesselProfile>>;
   };
   addresses: {
     search(
@@ -136,6 +157,50 @@ export type NorwayOpenDataLike = {
       parameters: KlassGetCodeParameters,
       options?: RequestOptions,
     ): Promise<OpenDataResponse<KlassCode>>;
+  };
+  ais: {
+    getTrackLast24Hours(mmsi: Mmsi, options?: RequestOptions): Promise<OpenDataResponse<AisTrack>>;
+    getTrack(
+      parameters: AisTrackParameters,
+      options?: RequestOptions,
+    ): Promise<OpenDataResponse<AisTrack>>;
+    /**
+     * A live feed, not a request.
+     *
+     * Typed as the SDK types it — an `AsyncIterable`, not a promise — because
+     * the one tool that consumes it must own the bounds. See
+     * `get_live_vessel_positions`: the MCP boundary never sees an unbounded
+     * stream.
+     */
+    streamPositions(parameters?: AisPositionStreamParameters): AsyncIterable<AisPosition>;
+  };
+  marine: {
+    getWaveForecast(
+      parameters: MarineForecastParameters,
+      options?: RequestOptions,
+    ): Promise<OpenDataResponse<WaveForecast | undefined>>;
+    getSeaCurrent(
+      parameters: MarineForecastParameters,
+      options?: RequestOptions,
+    ): Promise<OpenDataResponse<SeaCurrentForecast | undefined>>;
+  };
+  fisheries: {
+    searchVessels(
+      parameters?: FisheriesVesselSearchParameters,
+      options?: RequestOptions,
+    ): Promise<OpenDataResponse<FisheriesVesselSearchResult>>;
+    getVessel(
+      lookup: FisheriesVesselLookup,
+      options?: RequestOptions,
+    ): Promise<OpenDataResponse<FishingVessel>>;
+    searchAquacultureSites(
+      parameters?: AquacultureSiteSearchParameters,
+      options?: RequestOptions,
+    ): Promise<OpenDataResponse<AquacultureSiteSearchResult>>;
+    getAquacultureSite(
+      siteNumber: string,
+      options?: RequestOptions,
+    ): Promise<OpenDataResponse<AquacultureSite>>;
   };
 };
 

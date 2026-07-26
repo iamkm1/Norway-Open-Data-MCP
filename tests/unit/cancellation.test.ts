@@ -10,6 +10,7 @@
  */
 
 import { afterEach, describe, expect, it, vi } from "vitest";
+import type { AisPosition } from "norway-open-data-sdk";
 
 import { createHarness, type Harness } from "../helpers/harness.js";
 import { allTools } from "../../src/tools/registry.js";
@@ -45,7 +46,29 @@ const ARGUMENTS: Record<string, Record<string, unknown>> = {
     codePattern: "0301",
     date: "2024-01-01",
   },
+  get_vessel_profile: { mmsi: "257123456" },
+  get_vessel_track: { mmsi: "257123456" },
+  get_live_vessel_positions: {
+    boundingBox: { south: 63.3, west: 10.2, north: 63.6, east: 10.7 },
+    limit: 10,
+    // Comfortably longer than the test's own abort, so the timeout can never be
+    // what ends the sample here.
+    timeoutMs: 10_000,
+  },
+  search_fishing_vessels: { query: "Havstraum" },
+  get_fishing_vessel: { radioCallSign: "LDMV" },
+  search_aquaculture_locations: { municipalityCode: "5055" },
+  get_aquaculture_location: { siteNumber: "10318" },
+  get_marine_forecast: { latitude: 63.74, longitude: 9.22 },
 };
+
+/** Credentials the maritime tools are gated on; values are never sent anywhere. */
+const MARITIME_CONFIG = {
+  barentswatchClientId: "test-client-id",
+  barentswatchClientSecret: "test-client-secret",
+  barentswatchAisClientId: "test-ais-client-id",
+  barentswatchAisClientSecret: "test-ais-client-secret",
+} as const;
 
 /**
  * An SDK whose every method hangs until its signal aborts, recording the
@@ -70,7 +93,7 @@ function createSignalRecordingSdk(seen: AbortSignal[]): NorwayOpenDataLike {
 
   return createFakeSdk({
     companies: { search: hang },
-    profiles: { company: hang, address: hang, municipality: hang },
+    profiles: { company: hang, address: hang, municipality: hang, vessel: hang },
     addresses: { search: hang },
     weather: { forecast: hang },
     hazards: {
@@ -91,6 +114,39 @@ function createSignalRecordingSdk(seen: AbortSignal[]): NorwayOpenDataLike {
       searchCodes: hang,
       getCode: hang,
     },
+    ais: {
+      getTrackLast24Hours: hang,
+      getTrack: hang,
+      // A stream is not a promise, so it cannot "hang" the same way. It records
+      // the signal it was handed and then waits for that signal to abort, which
+      // is exactly the contract under test.
+      streamPositions: (parameters) => {
+        if (parameters?.signal) seen.push(parameters.signal);
+        // Written as a manual iterator rather than an async generator: it never
+        // yields, and a generator with no `yield` is a code smell the linter is
+        // right to reject.
+        return {
+          [Symbol.asyncIterator]: () => ({
+            next: () =>
+              new Promise<IteratorResult<AisPosition>>((resolve) => {
+                const done = (): void => resolve({ value: undefined, done: true });
+                if (parameters?.signal?.aborted === true) {
+                  done();
+                  return;
+                }
+                parameters?.signal?.addEventListener("abort", done, { once: true });
+              }),
+          }),
+        };
+      },
+    },
+    marine: { getWaveForecast: hang, getSeaCurrent: hang },
+    fisheries: {
+      searchVessels: hang,
+      getVessel: hang,
+      searchAquacultureSites: hang,
+      getAquacultureSite: hang,
+    },
   });
 }
 
@@ -98,7 +154,10 @@ describe("every tool propagates the caller's abort signal into the SDK", () => {
   for (const tool of allTools) {
     it(`${tool.name} forwards the signal and aborts on cancellation`, async () => {
       const seen: AbortSignal[] = [];
-      harness = await createHarness({ sdk: createSignalRecordingSdk(seen) });
+      harness = await createHarness({
+        sdk: createSignalRecordingSdk(seen),
+        config: { ...MARITIME_CONFIG },
+      });
 
       const controller = new AbortController();
       const pending = harness.client.callTool(
@@ -121,7 +180,10 @@ describe("every tool propagates the caller's abort signal into the SDK", () => {
 
   it("does not share one caller's signal with an unrelated call", async () => {
     const seen: AbortSignal[] = [];
-    harness = await createHarness({ sdk: createSignalRecordingSdk(seen) });
+    harness = await createHarness({
+      sdk: createSignalRecordingSdk(seen),
+      config: { ...MARITIME_CONFIG },
+    });
 
     const first = new AbortController();
     const second = new AbortController();
@@ -152,7 +214,10 @@ describe("every tool propagates the caller's abort signal into the SDK", () => {
 
   it("reports cancellation as cancelled, never as a provider failure", async () => {
     const seen: AbortSignal[] = [];
-    harness = await createHarness({ sdk: createSignalRecordingSdk(seen) });
+    harness = await createHarness({
+      sdk: createSignalRecordingSdk(seen),
+      config: { ...MARITIME_CONFIG },
+    });
 
     // Calling the handler directly, since an aborted client request never
     // returns a result to inspect.

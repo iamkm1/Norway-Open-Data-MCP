@@ -7,6 +7,10 @@
  * - 0.6.0 added the `sdk.klass` namespace, which the two SSB Klass tools
  *   (`resolve_norwegian_administrative_code`,
  *   `search_norwegian_classification_codes`) call directly.
+ * - 0.7.0 added `sdk.ais`, `sdk.marine`, `sdk.fisheries`, `profiles.vessel()`
+ *   and OAuth2 client-credentials support, which the eight maritime tools call
+ *   directly. On 0.6.0 those namespaces do not exist, so the failure would be a
+ *   `TypeError` at call time rather than anything a user could act on.
  *
  * The SDK is pre-1.0, so its breaking (and feature) changes ship as minor
  * versions and a caret range does not float across them automatically — the
@@ -21,7 +25,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
-const REQUIRED_MINIMUM = "0.6.0";
+const REQUIRED_MINIMUM = "0.7.0";
 const SDK = "norway-open-data-sdk";
 
 const repoFile = (relative: string): string =>

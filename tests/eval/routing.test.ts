@@ -112,6 +112,12 @@ describe("routing evaluation corpus", () => {
       ["get_norwegian_municipality_profile", "resolve_norwegian_administrative_code"],
       ["resolve_norwegian_administrative_code", "search_norwegian_classification_codes"],
       ["query_norwegian_statistics", "search_norwegian_classification_codes"],
+      ["get_vessel_profile", "get_vessel_track"],
+      ["get_vessel_track", "get_live_vessel_positions"],
+      ["search_fishing_vessels", "get_fishing_vessel"],
+      ["search_aquaculture_locations", "get_aquaculture_location"],
+      ["get_marine_forecast", "get_norwegian_weather_forecast"],
+      ["get_live_vessel_positions", "get_vessel_profile"],
     ];
 
     for (const [a, b] of pairs) {

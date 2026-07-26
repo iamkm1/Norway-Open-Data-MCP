@@ -79,6 +79,42 @@ function readInteger(
   return parsed;
 }
 
+/**
+ * Reads an OAuth2 client-credentials pair.
+ *
+ * A half-configured pair is refused rather than passed through: the SDK would
+ * accept it and only fail at the token endpoint, where the message names an
+ * HTTP status rather than the variable the user actually forgot. Both values
+ * are dropped so the affected tools report one clear "not configured" error
+ * naming both variables.
+ */
+function readCredentialPair(
+  env: EnvSource,
+  idKey: string,
+  secretKey: string,
+  problems: ConfigProblem[],
+): { clientId: string | undefined; clientSecret: string | undefined } {
+  const clientId = readTrimmed(env, idKey);
+  const clientSecret = readTrimmed(env, secretKey);
+
+  if (clientId !== undefined && clientSecret === undefined) {
+    problems.push({
+      variable: secretKey,
+      message: `Set together with ${idKey}. Both are required, so neither is used until both are present.`,
+    });
+    return { clientId: undefined, clientSecret: undefined };
+  }
+  if (clientSecret !== undefined && clientId === undefined) {
+    problems.push({
+      variable: idKey,
+      message: `Set together with ${secretKey}. Both are required, so neither is used until both are present.`,
+    });
+    return { clientId: undefined, clientSecret: undefined };
+  }
+
+  return { clientId, clientSecret };
+}
+
 export function resolveConfig(env: EnvSource = process.env): ConfigResolution {
   const problems: ConfigProblem[] = [];
 
@@ -106,10 +142,27 @@ export function resolveConfig(env: EnvSource = process.env): ConfigResolution {
     }
   }
 
+  const barentswatch = readCredentialPair(
+    env,
+    ENV_VARS.barentswatchClientId,
+    ENV_VARS.barentswatchClientSecret,
+    problems,
+  );
+  const barentswatchAis = readCredentialPair(
+    env,
+    ENV_VARS.barentswatchAisClientId,
+    ENV_VARS.barentswatchAisClientSecret,
+    problems,
+  );
+
   const config: ServerConfig = {
     applicationName,
     contactEmail,
     nveApiKey: readTrimmed(env, ENV_VARS.nveApiKey),
+    barentswatchClientId: barentswatch.clientId,
+    barentswatchClientSecret: barentswatch.clientSecret,
+    barentswatchAisClientId: barentswatchAis.clientId,
+    barentswatchAisClientSecret: barentswatchAis.clientSecret,
     timeoutMs: readInteger(env, ENV_VARS.timeoutMs, 10_000, TIMEOUT_RANGE, problems),
     retries: readInteger(env, ENV_VARS.retries, 2, RETRIES_RANGE, problems),
     cacheEnabled: readBoolean(env, ENV_VARS.cache, true, problems),
@@ -119,9 +172,22 @@ export function resolveConfig(env: EnvSource = process.env): ConfigResolution {
   return { config, problems };
 }
 
-/** Secret values held by this process, for the redactor. */
+/**
+ * Secret values held by this process, for the redactor.
+ *
+ * OAuth2 client ids are included alongside the secrets. A client id is not a
+ * password, but it identifies a registered client and the SDK redacts it for
+ * the same reason: it has no place in a tool result or a log line.
+ */
 export function secretsOf(config: ServerConfig): (string | undefined)[] {
-  return [config.contactEmail, config.nveApiKey];
+  return [
+    config.contactEmail,
+    config.nveApiKey,
+    config.barentswatchClientId,
+    config.barentswatchClientSecret,
+    config.barentswatchAisClientId,
+    config.barentswatchAisClientSecret,
+  ];
 }
 
 /** `--doctor` view of the configuration, with secrets masked. */
@@ -130,6 +196,16 @@ export function describeConfig(config: ServerConfig): Record<string, string> {
     [ENV_VARS.applicationName]: config.applicationName,
     [ENV_VARS.contactEmail]: config.contactEmail ? maskEmail(config.contactEmail) : "(not set)",
     [ENV_VARS.nveApiKey]: config.nveApiKey ? "(set, masked)" : "(not set)",
+    [ENV_VARS.barentswatchClientId]: config.barentswatchClientId ? "(set, masked)" : "(not set)",
+    [ENV_VARS.barentswatchClientSecret]: config.barentswatchClientSecret
+      ? "(set, masked)"
+      : "(not set)",
+    [ENV_VARS.barentswatchAisClientId]: config.barentswatchAisClientId
+      ? "(set, masked)"
+      : "(not set)",
+    [ENV_VARS.barentswatchAisClientSecret]: config.barentswatchAisClientSecret
+      ? "(set, masked)"
+      : "(not set)",
     [ENV_VARS.timeoutMs]: String(config.timeoutMs),
     [ENV_VARS.retries]: String(config.retries),
     [ENV_VARS.cache]: config.cacheEnabled ? "enabled (in-process only)" : "disabled",

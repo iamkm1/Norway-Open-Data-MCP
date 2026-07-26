@@ -57,7 +57,7 @@ separate packages and separate repositories.
 | -------------------------------------- | -------------------------- | ----------------------------------- |
 | What it is                             | A TypeScript library       | An MCP server                       |
 | Used by                                | Your own code              | AI assistants, via MCP              |
-| Surface                                | 15 namespaces, 55+ methods | 12 curated tools                    |
+| Surface                                | 18 namespaces, 70+ methods | 20 curated tools                    |
 | Network, retries, caching, rate limits | Owned by the SDK           | Delegated to the SDK                |
 
 The SDK's retry, cache and rate-limit behaviour is used as-is and deliberately
@@ -81,7 +81,8 @@ not reimplemented here.
                                                    │ HTTPS (outbound only)
                                                    ▼
    Brønnøysundregistrene · Kartverket · SSB · FHI · MET Norway · NVE (Varsom)
-   Entur · Statens vegvesen · Hva koster strømmen?
+   Entur · Statens vegvesen · Hva koster strømmen? · BarentsWatch
+   BarentsWatch AIS (Kystverket) · Fiskeridirektoratet
 ```
 
 No hosted backend · no HTTP listener · no database · no accounts · no telemetry
@@ -94,7 +95,9 @@ No hosted backend · no HTTP listener · no database · no accounts · no teleme
   are. `norway-open-data-mcp --doctor` checks this for you.
 - An MCP-compatible client.
 - **No API key is required by any tool.** One tool needs a contact email,
-  because MET Norway requires every caller to be identifiable.
+  because MET Norway requires every caller to be identifiable. Four maritime
+  tools need free BarentsWatch OAuth2 client credentials; the other fifteen
+  tools need nothing at all.
 
 ## Installation
 
@@ -205,17 +208,55 @@ Configuration**). VS Code uses `servers`, not `mcpServers`:
 
 ## Environment variables
 
-Everything is optional. Eleven of the twelve tools work with no configuration.
+Everything is optional. **Fifteen of the twenty tools work with no configuration
+at all**, including both Fiskeridirektoratet registers. The five that need
+something are `get_norwegian_weather_forecast` (a contact email for MET Norway),
+`get_marine_forecast`, and the three BarentsWatch AIS tools.
 
 | Variable                   | Default                      | What it does                                                                                                                                                                    |
 | -------------------------- | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `NORWAY_MCP_CONTACT_EMAIL` | _(unset)_                    | **Required by MET Norway.** Enables `get_norwegian_weather_forecast` and the weather section of `get_norwegian_location_profile`. MET requires every caller to be identifiable. |
-| `NORWAY_MCP_APP_NAME`      | `norway-open-data-mcp/0.2.0` | Caller identity sent to Entur (`ET-Client-Name`) and Statens vegvesen (`X-Client`), and part of MET's User-Agent.                                                               |
-| `NORWAY_MCP_NVE_API_KEY`   | _(unset)_                    | Free NVE HydAPI key. **No v0.1 tool needs it**; accepted for forward compatibility.                                                                                             |
+| `NORWAY_MCP_APP_NAME`      | `norway-open-data-mcp/0.3.0` | Caller identity sent to Entur (`ET-Client-Name`) and Statens vegvesen (`X-Client`), and part of MET's User-Agent.                                                               |
+| `NORWAY_MCP_NVE_API_KEY`   | _(unset)_                    | Free NVE HydAPI key. **No current tool needs it**; accepted for forward compatibility.                                                                                          |
 | `NORWAY_MCP_TIMEOUT_MS`    | `10000`                      | Request timeout, 1000–60000.                                                                                                                                                    |
 | `NORWAY_MCP_RETRIES`       | `2`                          | Retry attempts after the first, 0–5.                                                                                                                                            |
 | `NORWAY_MCP_CACHE`         | `1`                          | In-process response cache. Never written to disk.                                                                                                                               |
 | `NORWAY_MCP_DEBUG`         | `0`                          | Verbose diagnostics on **stderr only**, with credentials redacted.                                                                                                              |
+
+### BarentsWatch credentials (maritime tools)
+
+BarentsWatch issues **two separate registered clients** — one for AIS, one for
+its other services — and a secret registered for one is never accepted by the
+other. They are therefore two independent variable pairs, and the SDK keeps them
+in separate credential scopes so a secret can never be sent to the wrong host.
+
+| Variable                                    | Enables                                                               | Scope |
+| ------------------------------------------- | --------------------------------------------------------------------- | ----- |
+| `NORWAY_MCP_BARENTSWATCH_AIS_CLIENT_ID`     | `get_vessel_profile`, `get_vessel_track`, `get_live_vessel_positions` | `ais` |
+| `NORWAY_MCP_BARENTSWATCH_AIS_CLIENT_SECRET` | _(same three tools; both halves are required)_                        | `ais` |
+| `NORWAY_MCP_BARENTSWATCH_CLIENT_ID`         | `get_marine_forecast`                                                 | `api` |
+| `NORWAY_MCP_BARENTSWATCH_CLIENT_SECRET`     | _(same tool; both halves are required)_                               | `api` |
+
+Register a free client at [BarentsWatch MyPage](https://www.barentswatch.no/minside/) —
+an **AIS-client** for the AIS scope and an **API-client** for the other. Then:
+
+```powershell
+$env:NORWAY_MCP_BARENTSWATCH_AIS_CLIENT_ID="your-ais-client-id"
+$env:NORWAY_MCP_BARENTSWATCH_AIS_CLIENT_SECRET="your-ais-client-secret"
+```
+
+The OAuth2 client-credentials exchange, token caching, refresh-before-expiry and
+401 handling are all the SDK's. This server holds the two values, hands them to
+the SDK once at construction and never sees a token.
+
+**A half-configured pair is refused.** Setting only the id, or only the secret,
+drops both and reports the missing variable through `--doctor` — a token
+endpoint returning HTTP 400 names an HTTP status, not the variable you forgot.
+
+Without these variables the four BarentsWatch tools return a clear configuration
+error naming exactly the variables to set. **Tool discovery is unaffected and
+every other tool keeps working**, including the two Fiskeridirektoratet
+registers, which are served anonymously.
 
 Set the contact email with a placeholder of your own, for example:
 
@@ -232,9 +273,14 @@ working.
 An invalid value never crashes the server: it falls back to the documented
 default and is reported by `--doctor`.
 
+**Secrets never leave this process.** Client ids, client secrets and OAuth2
+tokens are redacted from every tool result, every error message and every stderr
+diagnostic, matched both as literal configured values and as credential-shaped
+patterns. `--doctor` prints `(set, masked)` and never the value.
+
 ## Tool catalogue
 
-Twelve curated read-only tools, grouped below by purpose. Tool **names** are
+Twenty curated read-only tools, grouped below by purpose. Tool **names** are
 stable, language-neutral identifiers and are never translated. Full contracts —
 input schemas, hard limits, warnings and error behaviour — are in
 [docs/tool-catalogue.md](docs/tool-catalogue.md).
@@ -287,20 +333,82 @@ SSB Klass is a **separate service** from the SSB statistics (PxWeb) API behind
 PxWeb publishes the _numbers_. Klass access is anonymous — no key, no new
 environment variable.
 
-### Why twelve tools and not one per SDK method
+### Vessels and AIS
 
-The SDK exposes 55+ public methods across 15 namespaces — including 14 in its
-`klass` namespace alone. Tool descriptions are routing instructions for a model,
-and a model given dozens of overlapping options routes worse than one given a
-dozen distinct ones. So only two curated Klass tools are exposed, not fourteen.
-Every method that was considered and deferred is recorded, with the reason, in
+| Tool                        | Purpose                                              | Source                                                    | Config              | Default / max                      |
+| --------------------------- | ---------------------------------------------------- | --------------------------------------------------------- | ------------------- | ---------------------------------- |
+| `get_vessel_profile`        | One vessel by MMSI: AIS position, identity, register | BarentsWatch AIS + Fiskeridirektoratet + MET + Kartverket | **AIS credentials** | 1 vessel                           |
+| `get_vessel_track`          | Recorded positions for one vessel over a past window | BarentsWatch AIS                                          | **AIS credentials** | 50 / 100 points, ≤ 14-day window   |
+| `get_live_vessel_positions` | Bounded sample of the live feed for one sea area     | BarentsWatch AIS                                          | **AIS credentials** | box + limit ≤ 200 + timeout ≤ 15 s |
+
+`get_live_vessel_positions` is the only tool backed by a **stream**. The SDK's
+`streamPositions()` is an endless `AsyncIterable`, and MCP has no way to express
+that — a tool call is one request and one result. So the tool takes a _sample_:
+a bounding box, a result limit and a timeout in milliseconds are all **required
+arguments with no defaults**, the sample stops at whichever bound is reached
+first, and the connection is closed on every path — limit reached, timeout,
+cancellation, or provider error. **No infinite stream is ever exposed through
+MCP.** A result is explicitly a sample, not a census of the area.
+
+> **The three bounds are limits of this MCP server, not of BarentsWatch.**
+> BarentsWatch publishes no maximum bounding-box size, no result cap and no
+> connection time limit for its AIS APIs — a caller using
+> [norway-open-data-sdk](https://www.npmjs.com/package/norway-open-data-sdk)
+> directly is subject to none of them. The bounding box is capped at **6° of
+> latitude by 12° of longitude**, the result limit at **200** and the timeout at
+> **15 s** because a tool call returns one bounded result into a model's context
+> window: over a much larger area the sample is dominated by whichever few
+> vessels transmitted first and stops representing the area at all, and a
+> long-held connection turns a question into a subscription. These are product
+> decisions, subject to revision, and the rejection message says so — a caller
+> is never left believing the provider refused the request.
+
+### Fisheries and aquaculture
+
+| Tool                           | Purpose                                                     | Source              | Config | Default / max   |
+| ------------------------------ | ----------------------------------------------------------- | ------------------- | ------ | --------------- |
+| `search_fishing_vessels`       | Search the register of active Norwegian fishing vessels     | Fiskeridirektoratet | —      | 10 / 50 vessels |
+| `get_fishing_vessel`           | One vessel by register id, registration mark or call sign   | Fiskeridirektoratet | —      | 1 vessel        |
+| `search_aquaculture_locations` | Find fish-farming sites by area, holder, species or licence | Fiskeridirektoratet | —      | 10 / 100 sites  |
+| `get_aquaculture_location`     | One aquaculture site by its site number                     | Fiskeridirektoratet | —      | 1 site          |
+
+Both registers are **open and anonymous** — they need no credentials at all.
+
+**Private vessel-owner details are never returned.** The register publishes
+owners including natural persons; the SDK already withholds their name, postal
+code and town, and this server additionally projects owners field by field, so
+only registered legal entities are described. Private owners are reported as a
+count and nothing more.
+
+### Marine conditions
+
+| Tool                  | Purpose                                        | Source       | Config              | Default / max          |
+| --------------------- | ---------------------------------------------- | ------------ | ------------------- | ---------------------- |
+| `get_marine_forecast` | Wave height, period, direction and sea current | BarentsWatch | **api credentials** | 1 coordinate, 2 models |
+
+A coordinate no model covers returns `null` sections rather than failing, which
+is how "no model covers this point" stays distinguishable from "the provider
+failed". If one of the two models fails and the other succeeds, the working one
+is still returned, with the failure recorded in `partial` and in the warnings.
+
+### Why twenty tools and not one per SDK method
+
+The SDK exposes 70+ public methods across 18 namespaces — including 14 in its
+`klass` namespace alone and 9 in `ais`. Tool descriptions are routing
+instructions for a model, and a model given dozens of overlapping options routes
+worse than one given a curated set. So only two Klass tools are exposed, not
+fourteen, and three AIS tools, not nine. Every method that was considered and
+deferred is recorded, with the reason, in
 [docs/capability-matrix.md](docs/capability-matrix.md).
 
-Three tools are **compositions** rather than method wrappers: departures resolves
-a stop name before fetching the board, hazards merges three warning feeds, and
-the statistics tool serves both table discovery and data through one schema. The
-classification-code search likewise routes an exact code to a precise lookup and
-a pattern to a code search behind one contract.
+Several tools are **compositions** rather than method wrappers: departures
+resolves a stop name before fetching the board, hazards merges three warning
+feeds, the statistics tool serves both table discovery and data through one
+schema, the marine forecast merges two independent models with per-section
+failure handling, and the vessel profile is the SDK's own cross-provider
+composition surfaced whole. The classification-code search likewise routes an
+exact code to a precise lookup and a pattern to a code search behind one
+contract.
 
 ## Usage examples
 
@@ -317,6 +425,11 @@ things you could ask:
 - Query a specific Statistics Norway table, such as population by municipality.
 - What replaced the old municipality number 1142, and was it a merge or a split?
 - Which STYRK occupation codes begin with 25? _(“Hvilke yrkeskoder starter på 25?”)_
+- Tell me about the vessel with MMSI 257123456 and where it has sailed today.
+- Which ships are moving in the Trondheimsfjord right now? _(a short live sample)_
+- How high are the waves off Hitra? _(“Hvor høye er bølgene utenfor Hitra?”)_
+- Which fishing vessels are registered in Stavanger, and which are over 30 m?
+- Which aquaculture sites are in Heim, and what biomass is site 10318 permitted?
 
 The server only reads and returns public data. It never performs actions, writes
 data, or makes changes on your behalf. And an empty hazard response is **not** an
@@ -366,6 +479,15 @@ terms:
 | Entur                                                | NLOD                                          |
 | Statens vegvesen                                     | NLOD 2.0                                      |
 | Hva koster strømmen?                                 | Open and free; no standardised licence stated |
+| BarentsWatch                                         | NLOD                                          |
+| BarentsWatch AIS (data from Kystverket)              | NLOD                                          |
+| Fiskeridirektoratet                                  | Fiskeridirektoratet data licence, NLOD terms  |
+
+**AIS data is supplied by the Norwegian Coastal Administration (Kystverket)
+through BarentsWatch, and both must be credited.** That attribution is carried
+on every AIS result, in both the structured envelope and the rendered text, so a
+text-only client cannot lose it. Wave forecasts additionally require crediting
+the model provider BarentsWatch names.
 
 This project is an independent open-source effort and is **not affiliated with,
 sponsored by or endorsed by** any Norwegian public authority or by Hva koster
@@ -382,7 +504,15 @@ strømmen?. The MIT licence covers this source code only, never the data. See
 - **Nothing is persisted.** The optional response cache is in-process only and
   ends with the process. No tool input, tool result or conversation content is
   ever written to disk.
-- Credentials are redacted from every result and every log line.
+- Credentials are redacted from every result and every log line. That includes
+  OAuth2 client ids, client secrets and any bearer token echoed back by a
+  provider; tokens are held in memory by the SDK and never written anywhere.
+- **No private vessel-owner information is returned.** Fiskeridirektoratet
+  publishes owners including natural persons; those records are reduced to a
+  count with no name, postal code or town.
+- **Vessel positions are public AIS broadcasts**, not tracking of people. A
+  live sample is bounded in area, count and duration, holds no connection beyond
+  15 seconds, and stores nothing.
 - The server cannot read files, write files, execute commands or fetch
   caller-supplied URLs. All network access goes through the SDK.
 
@@ -518,11 +648,37 @@ that admits its edges:
 - **Not exposed as tools:** journey planning, open-dataset catalogue search
   (Data.norge), exchange rates and policy rates (Norges Bank), FHI health tables
   beyond the municipality profile, NVDB road querying, parliamentary data
-  (Stortinget), power plants and reservoir levels, NVE HydAPI, and the ten SSB
+  (Stortinget), power plants and reservoir levels, NVE HydAPI, the ten SSB
   Klass methods beyond the two curated ones (correspondence tables, code
-  changes, and full classification/version/code-list browsing). All are
-  supported by the SDK; they were cut to keep the tool set routable. See
-  [docs/capability-matrix.md](docs/capability-matrix.md).
+  changes, and full classification/version/code-list browsing), and the six AIS
+  methods beyond the three curated ones (`streamMessages`, `getLatestPositions`,
+  `getMmsiInArea`, `getVesselSnapshot(s)`, `getCoverageArea`, `searchVessels`)
+  plus the marine wave _series_ endpoint and the auto-paginating fisheries
+  iterators. All are supported by the SDK; they were cut to keep the tool set
+  routable. See [docs/capability-matrix.md](docs/capability-matrix.md).
+- **AIS absence is never absence at sea.** BarentsWatch covers the Norwegian
+  economic zone plus the Svalbard and Jan Mayen protection zones, excludes
+  fishing vessels under 15 m and leisure or sailing vessels under 45 m, and
+  retains 14 days. "No position" never means an MMSI is unassigned or a vessel
+  does not exist, and every AIS result says so.
+- **`get_live_vessel_positions` returns a sample, not a census.** It holds a
+  live connection for at most 15 seconds and stops at the first bound reached.
+  Vessels transmitting later, less often, or outside the box are absent, and the
+  same call twice will not return the same set. Its bounding-box, result and
+  timeout caps are **this server's limits, not BarentsWatch's** — the provider
+  imposes none of them.
+- **Private vessel-owner details are never returned.** Only registered legal
+  entities are described; natural-person owners are counted and nothing more.
+  Read them from Fiskeridirektoratet directly, under that agency's own terms.
+- **Marine forecasts are model output on a grid.** The returned coordinate is
+  the centre of the grid cell that answered, which may be some distance from the
+  point you asked about, and BarentsWatch publishes no unit for sea-current
+  speed, so none is asserted.
+- **Aquaculture capacity is not comparable across sites** without checking
+  `capacityUnitType`; the register mixes units across licence kinds.
+- **The fishing-vessel and aquaculture registers report no total count.** Their
+  `hasMore` is inferred from a full page, so requesting the next page can
+  legitimately return nothing.
 - **Classification-code search is code-pattern search**, not name or full-text
   search. You match by code (`0301`), wildcard (`25*`), range (`01-05`) or list,
   never by a place or category name.
@@ -564,7 +720,7 @@ version is `0`:
 - **Patch** — fixes, validation corrections, documentation.
 - **Minor** — new tools, new optional inputs, new envelope fields. **A breaking
   change is also released as a minor version while the major is 0**, so pin
-  exactly (`norway-open-data-mcp@0.2.0`) if you depend on tool shapes.
+  exactly (`norway-open-data-mcp@0.3.0`) if you depend on tool shapes.
 - **Major** — reserved for 1.0 onwards.
 
 Treated as breaking: removing or renaming a tool, removing an input or output

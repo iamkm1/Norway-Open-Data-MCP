@@ -1,41 +1,97 @@
 # SDK capability matrix
 
-Source of truth: the installed declarations of `norway-open-data-sdk@0.6.0`
+Source of truth: the installed declarations of `norway-open-data-sdk@0.7.0`
 (`dist/index.d.ts`), its `PROVIDERS.md`, and the runtime `providerDescriptors`
 registry. Nothing in this document is inferred from the project brief.
 
-The SDK exposes **15 facade namespaces**. This matrix records every public
+The SDK exposes **18 facade namespaces**. This matrix records every public
 method on them and whether it is appropriate as an MCP tool.
 
 ## Provider registry (runtime-verified)
 
 Read from `providerDescriptors` at runtime on 2026-07-23.
 
-| Provider id         | Name                    | Access                  | `auth.requires`                   | Budget                    |
-| ------------------- | ----------------------- | ----------------------- | --------------------------------- | ------------------------- |
-| `brreg`             | Brønnøysundregistrene   | open                    | —                                 | 60/min (courtesy)         |
-| `data-norge`        | Data.norge.no           | open                    | —                                 | 10/min search, 5/s lookup |
-| `entur`             | Entur                   | identification-required | `applicationName`                 | 60/min (courtesy)         |
-| `fhi`               | FHI                     | open                    | —                                 | 30/min (courtesy)         |
-| `hvakosterstrommen` | Hva koster strømmen?    | open                    | —                                 | 30/min (courtesy)         |
-| `kartverket`        | Kartverket              | open                    | —                                 | 60/min (courtesy)         |
-| `met`               | MET Norway              | identification-required | `applicationName`, `contactEmail` | 60/min (courtesy)         |
-| `norges-bank`       | Norges Bank             | open                    | —                                 | 60/min (courtesy)         |
-| `nve`               | NVE                     | registration-required   | `apiKey` (HydAPI methods only)    | 30/min (courtesy)         |
-| `ssb`               | Statistics Norway       | open                    | —                                 | 30/min (documented)       |
-| `ssb-klass`         | Statistics Norway Klass | open                    | —                                 | 30/min (courtesy)         |
-| `stortinget`        | Stortinget              | open                    | —                                 | 100/min (documented)      |
-| `vegvesen`          | Statens vegvesen        | identification-required | `applicationName`                 | 60/min (courtesy)         |
+| Provider id          | Name                    | Access                  | `auth.requires`                   | Budget                    |
+| -------------------- | ----------------------- | ----------------------- | --------------------------------- | ------------------------- |
+| `barentswatch`       | BarentsWatch            | registration-required   | `clientId`, `clientSecret` (api)  | 60/min (courtesy)         |
+| `barentswatch-ais`   | BarentsWatch AIS        | registration-required   | `clientId`, `clientSecret` (ais)  | 60/min; 5/min for streams |
+| `brreg`              | Brønnøysundregistrene   | open                    | —                                 | 60/min (courtesy)         |
+| `data-norge`         | Data.norge.no           | open                    | —                                 | 10/min search, 5/s lookup |
+| `entur`              | Entur                   | identification-required | `applicationName`                 | 60/min (courtesy)         |
+| `fhi`                | FHI                     | open                    | —                                 | 30/min (courtesy)         |
+| `fiskeridir-aqua`    | Fiskeridir. aquaculture | open                    | —                                 | 60/min (courtesy)         |
+| `fiskeridir-vessels` | Fiskeridir. vessels     | open                    | —                                 | 60/min (courtesy)         |
+| `hvakosterstrommen`  | Hva koster strømmen?    | open                    | —                                 | 30/min (courtesy)         |
+| `kartverket`         | Kartverket              | open                    | —                                 | 60/min (courtesy)         |
+| `met`                | MET Norway              | identification-required | `applicationName`, `contactEmail` | 60/min (courtesy)         |
+| `norges-bank`        | Norges Bank             | open                    | —                                 | 60/min (courtesy)         |
+| `nve`                | NVE                     | registration-required   | `apiKey` (HydAPI methods only)    | 30/min (courtesy)         |
+| `ssb`                | Statistics Norway       | open                    | —                                 | 30/min (documented)       |
+| `ssb-klass`          | Statistics Norway Klass | open                    | —                                 | 30/min (courtesy)         |
+| `stortinget`         | Stortinget              | open                    | —                                 | 100/min (documented)      |
+| `vegvesen`           | Statens vegvesen        | identification-required | `applicationName`                 | 60/min (courtesy)         |
 
 Two consequences drive the configuration design:
 
-- `applicationName` is satisfiable by this package itself (`norway-open-data-mcp/0.2.0`),
+- `applicationName` is satisfiable by this package itself (`norway-open-data-mcp/0.3.0`),
   so Entur and Statens vegvesen work with **zero user setup**.
 - `contactEmail` cannot be invented. MET Norway is therefore the one provider that
   is genuinely user-configured, and it is the reference case for the
   "missing configuration" error path.
 - NVE's `apiKey` gates **only** HydAPI (`getHydrologyStations`, `getHydrologyObservations`).
   The Varsom warning feeds on the same provider are anonymous.
+- **BarentsWatch is two credential scopes, not one.** `barentswatch` and
+  `barentswatch-ais` are separate descriptors with separate OAuth2 grants,
+  because BarentsWatch issues a separate registered client for AIS. The SDK
+  never sends one scope's secret to the other's host, and this server mirrors
+  that with two independent environment-variable pairs. They are the only
+  OAuth2 client-credentials providers in the SDK.
+- **Fiskeridirektoratet is two open descriptors**, one per register, and needs no
+  credentials at all — which is why four of the eight maritime tools work with
+  zero configuration.
+
+## Maritime namespaces (0.7.0)
+
+### `ais` — `AisClient` (barentswatch-ais)
+
+| Method                      | Purpose                                  | Cred | Tool?                                                                                      |
+| --------------------------- | ---------------------------------------- | ---- | ------------------------------------------------------------------------------------------ |
+| `getTrackLast24Hours(mmsi)` | Recorded 24-hour track for one vessel    | yes  | **yes** — `get_vessel_track` (default path)                                                |
+| `getTrack(params)`          | Recorded track over an explicit window   | yes  | **yes** — `get_vessel_track` (explicit window)                                             |
+| `streamPositions(params)`   | Live position feed, `AsyncIterable`      | yes  | **yes** — `get_live_vessel_positions`, bounded                                             |
+| `getVesselSnapshot(mmsi)`   | Latest position + static data, merged    | yes  | via `profiles.vessel()`                                                                    |
+| `getVesselSnapshots(f)`     | Snapshots for a filter                   | yes  | no — area sweep already served by the stream                                               |
+| `getLatestPositions(f)`     | Point-in-time snapshot for a filter      | yes  | no — routing overlap with the live sample                                                  |
+| `getMmsiInArea(params)`     | MMSIs seen in a space/time window        | yes  | no — returns bare identifiers, low model value                                             |
+| `searchVessels(params)`     | Name search over recent static data      | yes  | no — routing overlap with the register search                                              |
+| `getCoverageArea()`         | Published sea area, GeoJSON MultiPolygon | yes  | no — a large geometry, not an answer; its meaning is carried as a standing warning instead |
+| `streamMessages(params)`    | Live feed of all message kinds           | yes  | no — a six-way union is not routable as one tool                                           |
+
+### `marine` — `MarineClient` (barentswatch)
+
+| Method                          | Purpose                              | Cred | Tool?                                                                                     |
+| ------------------------------- | ------------------------------------ | ---- | ----------------------------------------------------------------------------------------- |
+| `getWaveForecast(coords)`       | Wave forecast valid now              | yes  | **yes** — `get_marine_forecast`                                                           |
+| `getSeaCurrent(coords)`         | Sea-current forecast valid now       | yes  | **yes** — `get_marine_forecast`                                                           |
+| `getWaveForecastSeries(coords)` | Every model time at the nearest cell | yes  | no — a multi-hour series duplicates the point forecast's routing while multiplying output |
+
+### `fisheries` — `FisheriesClient` (fiskeridir-vessels, fiskeridir-aqua)
+
+| Method                           | Purpose                         | Cred | Tool?                                                                                                       |
+| -------------------------------- | ------------------------------- | ---- | ----------------------------------------------------------------------------------------------------------- |
+| `searchVessels(params)`          | Fishing-vessel register search  | no   | **yes** — `search_fishing_vessels`                                                                          |
+| `getVessel(lookup)`              | One vessel by id/mark/call sign | no   | **yes** — `get_fishing_vessel`                                                                              |
+| `searchAquacultureSites(params)` | Aquaculture register search     | no   | **yes** — `search_aquaculture_locations`                                                                    |
+| `getAquacultureSite(number)`     | One site by site number         | no   | **yes** — `get_aquaculture_location`                                                                        |
+| `searchVesselsAll(...)`          | Auto-paginating vessel iterator | no   | no — unbounded iteration is the opposite of an output budget; the paged search already exposes continuation |
+| `searchAquacultureSitesAll(...)` | Auto-paginating site iterator   | no   | no — same reason                                                                                            |
+
+### `profiles.vessel()` — `ProfileClient` (cross-provider)
+
+Exposed whole as `get_vessel_profile`. It composes AIS, the fishing-vessel
+register, MET Norway and Kartverket and reports per-section provenance, which is
+exactly the shape this server's envelope already carries — reimplementing that
+composition here would duplicate the SDK's join and lose its omission reasons.
 
 ## Method matrix
 
@@ -187,3 +243,22 @@ evidence of statistical comparability.
   reduced to one code; the tool never combines populations or other figures.
 - **Klass code search is code-pattern search**, not name/full-text search; the
   official API exposes no code-name search endpoint.
+- **AIS absence is not absence at sea.** BarentsWatch excludes fishing vessels
+  under 15 m and leisure or sailing vessels under 45 m, covers only Norwegian
+  waters, and retains 14 days. Every AIS-bearing tool result carries a standing
+  warning saying so, and `ais.status: "no-recent-data"` never means an MMSI is
+  unassigned.
+- **A live AIS sample is not a census.** `streamPositions()` is endless, so the
+  only thing an MCP tool can return is a sample bounded in area, count and time.
+  Every result names the bound that ended it.
+- **Natural-person vessel owners are never identified.** The SDK withholds their
+  name, postal code and town; this server additionally whitelists the fields it
+  copies, so only registered legal entities are described.
+- **Aquaculture capacity is not comparable without its unit.** `capacity` is
+  expressed in `capacityUnitType`, which varies by licence kind; the note is
+  attached wherever a capacity is returned.
+- **The fisheries registers publish no total count.** The SDK derives `hasMore`
+  from a full page, so it is surfaced as an inference, never as an exact count.
+- **Marine forecasts are grid-cell output.** The returned coordinate is the model
+  cell centre, not the requested point, and BarentsWatch publishes no unit for
+  sea-current speed, so none is asserted.

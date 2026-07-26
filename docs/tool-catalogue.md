@@ -1,6 +1,6 @@
 # Tool catalogue
 
-Twelve curated read-only tools. Tool names are stable, language-neutral
+Twenty curated read-only tools. Tool names are stable, language-neutral
 identifiers and are never translated.
 
 Conventions used below:
@@ -520,6 +520,330 @@ limit, timeout, cancellation.
 
 ---
 
+## 13. `get_vessel_profile`
+
+**Title:** Get vessel profile
+**SDK:** `profiles.vessel()` · **Provider:** BarentsWatch AIS + Fiskeridirektoratet + MET Norway + Kartverket · **Config:** `NORWAY_MCP_BARENTSWATCH_AIS_CLIENT_ID` + `_SECRET`
+
+**Description.** Identify one vessel by its MMSI and answer it from several
+providers at once: latest AIS position and identity, the Norwegian
+fishing-vessel register entry when there is one, conditions at the position and
+the nearest official place name.
+
+**Use this when** the user asks about a specific vessel and an MMSI is available.
+
+**Do not use this when** the question is about movement over time — that is
+`get_vessel_track` — or about which vessels are in an area, which is
+`get_live_vessel_positions`.
+
+**Input**
+
+| Field  | Type             | Default | Limit                                      |
+| ------ | ---------------- | ------- | ------------------------------------------ |
+| `mmsi` | string, required | —       | 1–9 digits; a string, so `0` prefixes hold |
+
+**Output** `{ mmsi, ais: { status, latestPosition?, trackPointCount?, trackFrom?, trackTo?, identity? }, registration?, weather?, nearestPlace?, components[] }`.
+**Budget** one vessel; the track is summarised by count and window rather than
+copied · typical 1–3 KB.
+**Warnings** AIS coverage caveat (always); owner-privacy note when a register
+entry is present; one line per omitted component explaining why.
+**Partial** non-null when a section was omitted as `provider-error` or
+`not-configured`. `not-applicable`, `not-found` and `not-covered` are ordinary
+absences and are explained in warnings without being called partial.
+**Errors** `missing_configuration` naming both AIS variables; `not_found`;
+provider failure, rate limit, timeout, cancellation.
+
+**Positive example.** "What is MMSI 257123456?" → `{ mmsi: "257123456" }`.
+**Routes elsewhere.** "Where has it sailed today?" → `get_vessel_track`.
+
+---
+
+## 14. `get_vessel_track`
+
+**Title:** Get vessel track
+**SDK:** `ais.getTrackLast24Hours()` / `ais.getTrack()` · **Provider:** BarentsWatch AIS · **Config:** `NORWAY_MCP_BARENTSWATCH_AIS_CLIENT_ID` + `_SECRET`
+
+**Description.** Recorded AIS positions for one vessel over a bounded past
+window — where it went, when, at what speed and on what course.
+
+**Use this when** the user asks where a vessel has been, its route, or its
+movement over time.
+
+**Do not use this when** a single current position with identity is wanted
+(`get_vessel_profile`), or for live area traffic
+(`get_live_vessel_positions`).
+
+**Input**
+
+| Field   | Type             | Default | Limit                             |
+| ------- | ---------------- | ------- | --------------------------------- |
+| `mmsi`  | string, required | —       | 1–9 digits                        |
+| `from`  | ISO-8601         | —       | with `to`; window ≤ 14 days       |
+| `to`    | ISO-8601         | —       | with `from`; must be after `from` |
+| `limit` | integer          | 50      | 1–100 points                      |
+
+Omitting both `from` and `to` uses the provider's own last-24-hours endpoint
+rather than a ranged query with defaulted dates. Supplying exactly one of them
+is refused.
+
+**Output** `{ mmsi, window: { mode, requestedFrom?, requestedTo? }, from?, to?, pointsRecorded, pointsReturned, points[] }`.
+**Budget** 50 default / 100 max points · typical 2–12 KB.
+**Warnings** AIS coverage caveat (always); truncation; an explicit note that an
+empty track is not evidence the vessel did not sail.
+**Errors** `missing_configuration`; `invalid_input` for a reversed, half-given or
+over-long window; provider failure, rate limit, timeout, cancellation.
+
+**Positive example.** "Where has MMSI 257123456 been today?" → `{ mmsi: "257123456" }`.
+**Routes elsewhere.** "What ships are out there now?" → `get_live_vessel_positions`.
+
+---
+
+## 15. `get_live_vessel_positions`
+
+**Title:** Sample live vessel positions
+**SDK:** `ais.streamPositions()` · **Provider:** BarentsWatch AIS · **Config:** `NORWAY_MCP_BARENTSWATCH_AIS_CLIENT_ID` + `_SECRET`
+
+**Description.** A short, bounded sample of the live AIS feed for one sea area.
+
+**This is the only tool backed by a stream, and the bounds are the contract.**
+`streamPositions()` is an endless `AsyncIterable`; MCP has no way to express one,
+because a tool call is one request and one result. So three bounds are
+**required arguments with no defaults**, since each alone is insufficient: the
+box limits how much sea is subscribed to, the limit stops a busy area filling
+the result budget, and the timeout stops a quiet area — which emits nothing at
+all — from hanging the call. The sample ends at whichever is reached first, and
+the connection is released on **every** path: limit reached (via the iterator's
+`return()`), timeout, caller cancellation, and provider error.
+
+**Use this when** the user asks what vessels are in an area right now.
+
+**Do not use this when** one vessel is already identified, or to build a census
+of an area — the result is explicitly a sample.
+
+**Input**
+
+| Field         | Type              | Default | Limit                                                                     |
+| ------------- | ----------------- | ------- | ------------------------------------------------------------------------- |
+| `boundingBox` | object, required  | —       | `{south,west,north,east}`; north>south, east>west, ≤ 6° × 12° (see below) |
+| `limit`       | integer, required | —       | 1–200 position reports                                                    |
+| `timeoutMs`   | integer, required | —       | 500–15000 ms                                                              |
+| `mmsi`        | string[]          | —       | 1–50 MMSIs                                                                |
+| `downsample`  | boolean           | `true`  | asks the provider for ≤ 1 message/minute/vessel                           |
+
+An antimeridian-crossing box is refused with an explicit message rather than
+silently returning nothing; no provider here publishes data there.
+
+**The 6° × 12° cap is a limit of this MCP server, not of BarentsWatch.**
+BarentsWatch publishes no maximum box size, and the SDK enforces only coordinate
+ranges, edge ordering and the antimeridian refusal — a caller using the SDK
+directly may request any box the provider will serve. The cap exists because a
+tool call returns one bounded result into a model's context window: across an
+area much larger than this, the sample is dominated by whichever few vessels
+transmitted first and stops being representative of the area at all. Refusing is
+more honest than returning that. It is a product decision, subject to revision,
+and the rejection message says so explicitly so a caller is never left believing
+the provider refused the request.
+
+**Output** `{ boundingBox, stoppedBecause: "limit-reached"|"timeout"|"stream-ended", sampledForMs, positionCount, vesselCount, positions[] }`.
+**Budget** ≤ 200 positions and ≤ 15 s of wall-clock connection · typical 1–20 KB.
+**Warnings** AIS coverage caveat; an explicit "this is a sample, not a complete
+picture" note naming the bound that ended it; a note when nothing was received;
+a note when the limit was hit before the timeout.
+**Errors** `missing_configuration`; `invalid_input` for any missing or malformed
+bound; `cancelled` when the caller aborts; provider failure, rate limit.
+
+**Positive example.** "What is moving in the Trondheimsfjord?" →
+`{ boundingBox: { south: 63.3, west: 10.2, north: 63.6, east: 10.7 }, limit: 25, timeoutMs: 5000 }`.
+**Routes elsewhere.** "Where has that ship been?" → `get_vessel_track`.
+
+---
+
+## 16. `search_fishing_vessels`
+
+**Title:** Search Norwegian fishing vessels
+**SDK:** `fisheries.searchVessels()` · **Provider:** Fiskeridirektoratet · **Config:** none
+
+**Description.** Search the register of active Norwegian fishing vessels by name,
+registration mark, call sign, home municipality or hull length.
+
+**Use this when** the user is looking for fishing vessels matching a description.
+
+**Do not use this when** one exact identifier is already held
+(`get_fishing_vessel`), or for a vessel's position (`get_vessel_profile`).
+
+**Input**
+
+| Field              | Type    | Default | Limit                             |
+| ------------------ | ------- | ------- | --------------------------------- |
+| `query`            | string  | —       | 2–100 chars, free text            |
+| `name`             | string  | —       | 2–100 chars                       |
+| `registrationMark` | string  | —       | `R 0062H`, `R-62-H` or `R-0062-H` |
+| `radioCallSign`    | string  | —       | 3–10 letters or digits            |
+| `municipalityCode` | string  | —       | exactly 4 digits                  |
+| `minLength`        | number  | —       | 0–500 m, ≤ `maxLength`            |
+| `maxLength`        | number  | —       | 0–500 m                           |
+| `limit`            | integer | 10      | 1–50 vessels                      |
+| `page`             | integer | 1       | 1–100 (the register is one-based) |
+
+At least one filter is required; an unfiltered walk of the register is refused.
+
+**Output** `{ vessels[], pagination: { page, pageSize, hasMore } }`.
+**Budget** 10 default / 50 max vessels · typical 1–8 KB.
+**Warnings** owner-privacy note when ownership is published; a note that
+`hasMore` is inferred from a full page because the register reports no total.
+**Errors** provider failure, rate limit, timeout, cancellation.
+
+**Positive example.** "Fishing vessels in Stavanger?" → `{ municipalityCode: "1103" }`.
+**Routes elsewhere.** "The one with call sign LDMV" → `get_fishing_vessel`.
+
+---
+
+## 17. `get_fishing_vessel`
+
+**Title:** Get a Norwegian fishing vessel
+**SDK:** `fisheries.getVessel()` · **Provider:** Fiskeridirektoratet · **Config:** none
+
+**Description.** Resolve exactly one register entry from a register id, a
+registration mark or a radio call sign.
+
+**Use this when** one exact identifier is in hand.
+
+**Do not use this when** searching by name, area or size.
+
+**Input**
+
+| Field              | Type   | Default | Limit                     |
+| ------------------ | ------ | ------- | ------------------------- |
+| `id`               | string | —       | 1–10 digits               |
+| `registrationMark` | string | —       | `R 0062H` / `R-62-H` form |
+| `radioCallSign`    | string | —       | 3–10 letters or digits    |
+
+**Exactly one** must be given. Combining two is refused rather than silently
+privileging whichever the code checks first.
+
+**Output** `{ vessel, matchedBy: "id"|"registrationMark"|"radioCallSign" }`.
+**Budget** one vessel · typical <2 KB.
+**Warnings** owner-privacy note when ownership is published.
+**Errors** `not_found` both when nothing matches **and when more than one does** —
+an ambiguous mark is never resolved arbitrarily.
+
+**Positive example.** "Look up call sign LDMV." → `{ radioCallSign: "LDMV" }`.
+
+---
+
+## 18. `search_aquaculture_locations`
+
+**Title:** Search Norwegian aquaculture locations
+**SDK:** `fisheries.searchAquacultureSites()` · **Provider:** Fiskeridirektoratet · **Config:** none
+
+**Description.** Find fish-farming sites by name, licence holder, licence number,
+municipality, county, production area, placement, water type or species.
+
+**Use this when** the user asks which fish farms exist somewhere, or which sites
+a company holds.
+
+**Do not use this when** a site number is already known.
+
+**Input**
+
+| Field                | Type    | Default | Limit                                  |
+| -------------------- | ------- | ------- | -------------------------------------- |
+| `name`               | string  | —       | 2–100 chars                            |
+| `organizationNumber` | string  | —       | exactly 9 digits                       |
+| `licenceNumber`      | string  | —       | `H-KM-0018` form                       |
+| `municipalityCode`   | string  | —       | exactly 4 digits                       |
+| `countyCode`         | string  | —       | exactly 2 digits                       |
+| `productionAreaCode` | string  | —       | 1–13                                   |
+| `placementType`      | string  | —       | ≤ 40 chars, e.g. `Offshore`            |
+| `waterType`          | enum    | —       | `Salt` \| `Fresh` \| `Brackish`        |
+| `speciesType`        | string  | —       | ≤ 40 chars, e.g. `Salmon`              |
+| `limit`              | integer | 10      | 1–100 (the register's own ceiling)     |
+| `offset`             | integer | 0       | 0–10000 (the register pages by offset) |
+
+At least one filter is required.
+
+**Output** `{ sites[], pagination: { offset, limit, hasMore } }`.
+**Budget** 10 default / 100 max sites · typical 1–15 KB.
+**Warnings** capacity-unit note when any site publishes a capacity; the inferred
+`hasMore` note.
+**Errors** provider failure, rate limit, timeout, cancellation.
+
+**Positive example.** "Fish farms in Heim?" → `{ municipalityCode: "5055" }`.
+
+---
+
+## 19. `get_aquaculture_location`
+
+**Title:** Get a Norwegian aquaculture location
+**SDK:** `fisheries.getAquacultureSite()` · **Provider:** Fiskeridirektoratet · **Config:** none
+
+**Description.** One site by its public site number (lokalitetsnummer),
+including coordinate, capacity with its unit, species, licences and the
+production area with its traffic-light status.
+
+**Use this when** a site number is known.
+
+**Do not use this when** discovering sites by area or company, and do not confuse
+a site number with a licence number such as `H-KM-0018`.
+
+**Input**
+
+| Field        | Type             | Default | Limit      |
+| ------------ | ---------------- | ------- | ---------- |
+| `siteNumber` | string, required | —       | 1–7 digits |
+
+**Output** `{ site }`, with placement and licences flattened onto the site.
+**Budget** one site · typical <2 KB.
+**Warnings** capacity-unit note: `capacity` is meaningless without
+`capacityUnitType`, and the register mixes units across licence kinds.
+**Errors** `not_found`; provider failure, rate limit, timeout, cancellation.
+
+**Positive example.** "What is site 10318?" → `{ siteNumber: "10318" }`.
+
+---
+
+## 20. `get_marine_forecast`
+
+**Title:** Get Norwegian marine forecast
+**SDK:** `marine.getWaveForecast()` + `marine.getSeaCurrent()` · **Provider:** BarentsWatch · **Config:** `NORWAY_MCP_BARENTSWATCH_CLIENT_ID` + `_SECRET`
+
+**Description.** Wave and sea-current forecasts valid now for a coordinate along
+the Norwegian coast.
+
+**Use this when** the user asks about sea state, wave height, swell or currents —
+conditions on the water rather than in the air.
+
+**Do not use this when** the question is about wind, air temperature or
+precipitation (`get_norwegian_weather_forecast`) or official danger warnings
+(`get_current_norwegian_hazards`).
+
+**Input**
+
+| Field       | Type             | Default               | Limit                     |
+| ----------- | ---------------- | --------------------- | ------------------------- |
+| `latitude`  | number, required | —                     | −90 to 90, finite         |
+| `longitude` | number, required | —                     | −180 to 180, finite       |
+| `include`   | enum[]           | `["waves","current"]` | 1–2 of `waves`, `current` |
+
+The two requests are issued sequentially, not concurrently: both hit the same
+provider and its request budget is a courtesy limit worth staying inside.
+
+**Output** `{ requested, waves | null, current | null, failedSections[] }`.
+**Budget** two model reads · typical <1 KB.
+**Warnings** model-grid note (the returned coordinate is the grid cell centre, not
+the requested point); "no model covers this coordinate" per absent section; a
+per-section failure note when a request failed.
+**Partial** non-null only when a request **failed**. An uncovered coordinate is a
+normal outcome and is not reported as partial — that distinction is the point.
+**Errors** `missing_configuration`; `provider_error` only when **every**
+requested section failed; rate limit, timeout, cancellation.
+
+**Positive example.** "How high are the waves off Hitra?" →
+`{ latitude: 63.74, longitude: 9.22 }`.
+**Routes elsewhere.** "Will it rain there?" → `get_norwegian_weather_forecast`.
+
+---
+
 ## Routing-ambiguity register
 
 Pairs deliberately separated by wording, and the discriminator used:
@@ -536,6 +860,12 @@ Pairs deliberately separated by wording, and the discriminator used:
 | 5 vs 11  | Municipality statistics vs. did this code change over time        |
 | 11 vs 12 | Did a code change over time vs. look a code up in a list          |
 | 10 vs 12 | Statistics numbers vs. official classification code list          |
+| 13 vs 14 | One vessel now (identity + position) vs. its movement over time   |
+| 14 vs 15 | A known vessel's history vs. unknown vessels in an area right now |
+| 15 vs 13 | Area sweep with no vessel named vs. one MMSI already in hand      |
+| 16 vs 17 | Several candidates by description vs. one exact identifier        |
+| 18 vs 19 | Discover sites by area or holder vs. one known site number        |
+| 20 vs 6  | Conditions on the water (waves, current) vs. in the air (wind)    |
 
 These are exercised directly by the evaluation corpus in
 `tests/eval/tool-routing.json`.

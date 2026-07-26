@@ -35,7 +35,7 @@ describe("tool registry", () => {
 
     expect(tools).toHaveLength(EXPECTED_TOOL_COUNT);
     expect(allTools).toHaveLength(EXPECTED_TOOL_COUNT);
-    expect(EXPECTED_TOOL_COUNT).toBe(12);
+    expect(EXPECTED_TOOL_COUNT).toBe(20);
   });
 
   it("registers the two SSB Klass tools exactly once, without disturbing the existing set", async () => {
@@ -285,12 +285,36 @@ describe("doctor", () => {
 
     const text = report.lines.join("\n");
     expect(report.exitCode).toBe(0);
-    expect(text).toContain("Tools (12)");
+    expect(text).toContain("Tools (20)");
     expect(text).toContain("get_norwegian_weather_forecast: needs NORWAY_MCP_CONTACT_EMAIL");
     // SSB Klass tools need no configuration and are ready even with an empty env.
     expect(text).toContain("resolve_norwegian_administrative_code: ready");
     expect(text).toContain("search_norwegian_classification_codes: ready");
+    // The Fiskeridirektoratet registers are open and need no credentials either.
+    expect(text).toContain("search_fishing_vessels: ready");
+    expect(text).toContain("get_aquaculture_location: ready");
+    // The BarentsWatch tools name both variables they need.
+    expect(text).toContain(
+      "get_vessel_profile: needs NORWAY_MCP_BARENTSWATCH_AIS_CLIENT_ID, NORWAY_MCP_BARENTSWATCH_AIS_CLIENT_SECRET",
+    );
+    expect(text).toContain(
+      "get_marine_forecast: needs NORWAY_MCP_BARENTSWATCH_CLIENT_ID, NORWAY_MCP_BARENTSWATCH_CLIENT_SECRET",
+    );
     expect(text).toContain("No network requests were made");
+  });
+
+  it("masks BarentsWatch credentials rather than printing them", () => {
+    const report = buildDoctorReport({
+      NORWAY_MCP_BARENTSWATCH_AIS_CLIENT_ID: "ais-id-abcdef",
+      NORWAY_MCP_BARENTSWATCH_AIS_CLIENT_SECRET: "ais-secret-abcdef",
+    });
+
+    const text = report.lines.join("\n");
+    expect(text).not.toContain("ais-id-abcdef");
+    expect(text).not.toContain("ais-secret-abcdef");
+    expect(text).toContain("NORWAY_MCP_BARENTSWATCH_AIS_CLIENT_SECRET: (set, masked)");
+    // With both halves present the AIS tools report ready.
+    expect(text).toContain("get_vessel_profile: ready");
   });
 
   it("masks secrets in its output", () => {

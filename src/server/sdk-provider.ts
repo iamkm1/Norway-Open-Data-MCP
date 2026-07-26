@@ -13,7 +13,7 @@
  * unaffected tool keep working.
  */
 
-import { NorwayOpenData } from "norway-open-data-sdk";
+import { NorwayOpenData, type ProviderCredentials } from "norway-open-data-sdk";
 
 import { ConfigurationRequiredError } from "../errors/map.js";
 import { ENV_VARS, type ServerConfig } from "../config/types.js";
@@ -21,6 +21,39 @@ import type { NorwayOpenDataLike } from "../tools/types.js";
 
 /** Cache entries are small normalized objects; 200 is generous and bounded. */
 const CACHE_MAX_ENTRIES = 200;
+
+/**
+ * Builds the SDK's per-provider credential map from configuration.
+ *
+ * Each entry is added only when the pair is complete. `barentswatch` and
+ * `barentswatch-ais` are distinct credential scopes in the SDK — BarentsWatch
+ * issues a separate registered client for AIS — so a secret configured for one
+ * is never copied into the other.
+ */
+function buildCredentials(config: ServerConfig): ProviderCredentials {
+  const credentials: ProviderCredentials = {};
+
+  if (config.nveApiKey !== undefined) {
+    credentials.nve = { apiKey: config.nveApiKey };
+  }
+  if (config.barentswatchClientId !== undefined && config.barentswatchClientSecret !== undefined) {
+    credentials.barentswatch = {
+      clientId: config.barentswatchClientId,
+      clientSecret: config.barentswatchClientSecret,
+    };
+  }
+  if (
+    config.barentswatchAisClientId !== undefined &&
+    config.barentswatchAisClientSecret !== undefined
+  ) {
+    credentials["barentswatch-ais"] = {
+      clientId: config.barentswatchAisClientId,
+      clientSecret: config.barentswatchAisClientSecret,
+    };
+  }
+
+  return credentials;
+}
 
 export function createSdkProvider(config: ServerConfig): () => NorwayOpenDataLike {
   let instance: NorwayOpenDataLike | undefined;
@@ -31,6 +64,7 @@ export function createSdkProvider(config: ServerConfig): () => NorwayOpenDataLik
     if (failure) throw failure;
 
     try {
+      const credentials = buildCredentials(config);
       instance = new NorwayOpenData({
         applicationName: config.applicationName,
         ...(config.contactEmail !== undefined ? { contactEmail: config.contactEmail } : {}),
@@ -42,9 +76,7 @@ export function createSdkProvider(config: ServerConfig): () => NorwayOpenDataLik
           enabled: config.cacheEnabled,
           maxEntries: CACHE_MAX_ENTRIES,
         },
-        ...(config.nveApiKey !== undefined
-          ? { credentials: { nve: { apiKey: config.nveApiKey } } }
-          : {}),
+        ...(Object.keys(credentials).length > 0 ? { credentials } : {}),
       });
       return instance;
     } catch (error) {

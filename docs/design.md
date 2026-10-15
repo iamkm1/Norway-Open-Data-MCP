@@ -121,10 +121,11 @@ documents it as the stable signal — a 503 with `Retry-After` is a
 
 A single `redact()` pass runs over every outgoing message and every log line:
 
-- Values of the configured `contactEmail` and any provider `apiKey` are replaced
-  with `[redacted]` — matched by value, so they are caught wherever they appear.
-- `Authorization`, `api-key`, `x-api-key`, `cookie`, `set-cookie` token patterns
-  are stripped.
+- Values of every configured credential — the `contactEmail`, the NVE `apiKey`,
+  both BarentsWatch client ids and secrets and the Frost client ID — are replaced
+  with `[redacted]`, matched by value, so they are caught wherever they appear.
+- `Authorization` (Bearer and Basic), `api-key`, `x-api-key`, `cookie`,
+  `set-cookie` token patterns are stripped.
 - Absolute local paths (`/…`, `C:\…`, `file://…`) are removed.
 - Stack traces are never included. `cause` chains are never serialized;
   a zod `cause` is reduced to `{path, message}` pairs only.
@@ -138,17 +139,18 @@ redaction.
 All configuration is environment variables, because that is what every MCP
 client config format supports (`env` in Claude Desktop, Cursor and VS Code).
 
-| Variable                                            | Default                              | Effect                                                                                                                     |
-| --------------------------------------------------- | ------------------------------------ | -------------------------------------------------------------------------------------------------------------------------- |
-| `NORWAY_MCP_APP_NAME`                               | `norway-open-data-mcp/<pkg version>` | Sent as Entur `ET-Client-Name` and Statens vegvesen `X-Client`; part of MET's User-Agent.                                  |
-| `NORWAY_MCP_CONTACT_EMAIL`                          | _(unset)_                            | **Required by MET Norway only.** Enables `get_norwegian_weather_forecast` and the weather section of the location profile. |
-| `NORWAY_MCP_NVE_API_KEY`                            | _(unset)_                            | Free NVE HydAPI key. No current tool requires it; accepted so the SDK is configured consistently.                          |
-| `NORWAY_MCP_BARENTSWATCH_CLIENT_ID` / `_SECRET`     | _(unset)_                            | BarentsWatch OAuth2 client credentials, `api` scope. Enables `get_marine_forecast`. Both halves required together.         |
-| `NORWAY_MCP_BARENTSWATCH_AIS_CLIENT_ID` / `_SECRET` | _(unset)_                            | BarentsWatch OAuth2 client credentials, `ais` scope — a **separate** registered client. Enables the three AIS tools.       |
-| `NORWAY_MCP_TIMEOUT_MS`                             | `10000`                              | SDK request timeout. 1 000–60 000.                                                                                         |
-| `NORWAY_MCP_RETRIES`                                | `2`                                  | SDK retry attempts after the first. 0–5.                                                                                   |
-| `NORWAY_MCP_CACHE`                                  | `1`                                  | In-process response cache. `0` disables. Never persisted.                                                                  |
-| `NORWAY_MCP_DEBUG`                                  | `0`                                  | Verbose stderr diagnostics. Never stdout. Redacted.                                                                        |
+| Variable                                            | Default                              | Effect                                                                                                                                                                                                                                                                        |
+| --------------------------------------------------- | ------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `NORWAY_MCP_APP_NAME`                               | `norway-open-data-mcp/<pkg version>` | Sent as Entur `ET-Client-Name` and Statens vegvesen `X-Client`; part of MET's User-Agent.                                                                                                                                                                                     |
+| `NORWAY_MCP_CONTACT_EMAIL`                          | _(unset)_                            | **Required by MET Norway only.** Enables `get_norwegian_weather_forecast`, `get_norwegian_weather_warnings`, `get_norwegian_precipitation_nowcast` and `get_norwegian_sun_times`, the weather section of the location profile and the MET sections of the conditions profile. |
+| `NORWAY_MCP_NVE_API_KEY`                            | _(unset)_                            | Free NVE HydAPI key. No current tool requires it; accepted so the SDK is configured consistently.                                                                                                                                                                             |
+| `NORWAY_MCP_BARENTSWATCH_CLIENT_ID` / `_SECRET`     | _(unset)_                            | BarentsWatch OAuth2 client credentials, `api` scope. Enables `get_marine_forecast`. Both halves required together.                                                                                                                                                            |
+| `NORWAY_MCP_BARENTSWATCH_AIS_CLIENT_ID` / `_SECRET` | _(unset)_                            | BarentsWatch OAuth2 client credentials, `ais` scope — a **separate** registered client. Enables the three AIS tools.                                                                                                                                                          |
+| `NORWAY_MCP_MET_FROST_CLIENT_ID`                    | _(unset)_                            | Free MET Norway Frost client ID — one value, no secret. Enables `get_norwegian_weather_history` and the observations section of the conditions profile.                                                                                                                       |
+| `NORWAY_MCP_TIMEOUT_MS`                             | `10000`                              | SDK request timeout. 1 000–60 000.                                                                                                                                                                                                                                            |
+| `NORWAY_MCP_RETRIES`                                | `2`                                  | SDK retry attempts after the first. 0–5.                                                                                                                                                                                                                                      |
+| `NORWAY_MCP_CACHE`                                  | `1`                                  | In-process response cache. `0` disables. Never persisted.                                                                                                                                                                                                                     |
+| `NORWAY_MCP_DEBUG`                                  | `0`                                  | Verbose stderr diagnostics. Never stdout. Redacted.                                                                                                                                                                                                                           |
 
 Only variables that map to a real `NorwayOpenDataConfig` field exist. No
 credential is invented: the SDK declares exactly five auth fields
@@ -165,6 +167,16 @@ A **half-configured pair is dropped**, both halves, and reported as a config
 problem naming the missing variable. Passing one half through would let the SDK
 build a token request that can only fail, and a token endpoint's HTTP 400 names
 a status code rather than the variable the user forgot to set.
+
+**Frost is the exception to the pair rule.** `met-frost` takes a `clientId` and
+no secret, sent as the HTTP Basic username on Frost's own requests, so
+`NORWAY_MCP_MET_FROST_CLIENT_ID` is read as one value. The pair reader would
+drop a client ID that has no secret. The value is checked against the SDK's own
+rule — printable ASCII without a colon — and a malformed one is dropped and
+reported as a config problem, as a bad email is. Should the SDK still reject it,
+the tool error names `NORWAY_MCP_MET_FROST_CLIENT_ID` rather than the SDK's
+`credentials["met-frost"].clientId` wording, which describes code a user of this
+server cannot change.
 
 The OAuth2 exchange itself — token acquisition, in-memory caching, refresh
 before expiry, discarding a token rejected with 401, and sharing one in-flight

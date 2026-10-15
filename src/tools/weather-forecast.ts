@@ -162,7 +162,10 @@ export const weatherForecastTool: ToolDefinition<typeof inputSchema, Data> = {
     "Do not use this when the user asks about official danger warnings for flood, avalanche or " +
     "landslide — that is get_current_norwegian_hazards, a different provider answering a " +
     "different question. For weather at a street address rather than a coordinate, " +
-    "get_norwegian_location_profile resolves the address first. " +
+    "get_norwegian_location_profile resolves the address first. MET Norway's own weather " +
+    "warnings are get_norwegian_weather_warnings, rain in the next two hours is " +
+    "get_norwegian_precipitation_nowcast, and what the weather was is " +
+    "get_norwegian_weather_history. " +
     "Requires the NORWAY_MCP_CONTACT_EMAIL environment variable, because MET Norway requires " +
     "every caller to identify itself.",
   inputSchema,

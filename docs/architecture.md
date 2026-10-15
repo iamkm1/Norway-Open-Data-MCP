@@ -46,7 +46,7 @@ below it.
               ↓
         tool handlers            src/tools/*.ts
               ↓
-        Norway Open Data SDK     norway-open-data-sdk@0.8.0
+        Norway Open Data SDK     norway-open-data-sdk@0.9.0
               ↓
         public Norwegian APIs
 ```
@@ -200,15 +200,17 @@ loudly if a future change introduces an HTTP path.
 | Test            | Vitest 4 | Native ESM + TS, v8 coverage, no transform config.                                                                                                                          |
 | Package manager | pnpm 11  | Strict node_modules layout catches undeclared-dependency bugs before publish.                                                                                               |
 
-## Why the tool count is 28, not one per SDK method
+## Why the tool count is 34, not one per SDK method
 
-The SDK exposes 80+ public methods across 21 namespaces — the `klass` namespace
-alone has 14, `ais` has 9, and `geodata`, `environment` and `land` add 15 more. A server with one tool per method is unusable: tool
-descriptions are routing instructions, and an AI model given dozens of
-overlapping options routes worse than one given a curated set. So SSB Klass is
-exposed as two tools, not fourteen, AIS as three, not nine, and the three
-geospatial namespaces as eight, not fifteen. Selection
-criteria, in priority order:
+The SDK exposes 135 public methods across 24 namespaces — the `klass` namespace
+alone has 14, `ais` has 10, `geodata`, `environment` and `land` add 15 more, and
+0.9.0 added 17 across `weather`, `tides`, `climate`, `places` and `profiles`. A
+server with one tool per method is unusable: tool descriptions are routing
+instructions, and an AI model given dozens of overlapping options routes worse
+than one given a curated set. So SSB Klass is exposed as two tools, not fourteen,
+AIS as three, not ten, the three geospatial namespaces as eight, not fifteen, and
+the weather, tide and climate surface as six, not seventeen. Selection criteria,
+in priority order:
 
 1. Answers a question a person actually asks about Norway.
 2. Distinct enough that a model can choose it without ambiguity.
@@ -223,9 +225,15 @@ Several tools are **compositions or routers**, not thin method wrappers:
 `search_norwegian_classification_codes` (exact `getCode` vs. `searchCodes`
 pattern behind one contract), `get_vessel_track` (last-24-hours endpoint vs.
 ranged query), `get_marine_forecast` (two independent models merged with
-per-section failure handling), and `get_protected_areas_at` (two Naturbase
+per-section failure handling), `get_protected_areas_at` (two Naturbase
 datasets queried independently so a proposal-layer outage cannot destroy the
-legal-protection answer).
+legal-protection answer), `get_norwegian_tides` (a tide table plus optional water
+levels, where a water-level failure costs only the water levels) and
+`get_norwegian_weather_history` (station search → observations → optional
+normals). `get_weather_conditions_profile`, like the vessel and nature profiles,
+is the SDK's own cross-provider composition surfaced whole: its fourteen
+operations, prerequisites and omission reasons are the SDK's, and this layer only
+bounds, projects and labels them.
 
 ### Geospatial output is governed by one rule
 

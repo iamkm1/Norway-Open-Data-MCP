@@ -1,15 +1,21 @@
 # SDK capability matrix
 
-Source of truth: the installed declarations of `norway-open-data-sdk@0.8.0`
-(`dist/index.d.ts`), its `PROVIDERS.md`, and the runtime `providerDescriptors`
-registry. Nothing in this document is inferred from the project brief.
+Source of truth: the installed declarations of `norway-open-data-sdk@0.9.0`
+(`dist/index.d.ts`), its `CHANGELOG.md`, `PROVIDERS.md` and `docs/capabilities.md`,
+and the runtime `providerDescriptors` registry. Nothing in this document is
+inferred from the project brief.
 
-The SDK exposes **21 facade namespaces**. This matrix records every public
-method on them and whether it is appropriate as an MCP tool.
+The SDK exposes **135 public methods across 24 facade namespaces** (0.9.0 added
+17: six `weather` methods, four `tides`, five `climate`,
+`places.getMunicipalityAt` and `profiles.conditionsAtLocation`). Earlier versions
+of this document said 21 namespaces and "80+" methods; that was already out of
+date before 0.9.0. This matrix records the public methods and whether each is
+appropriate as an MCP tool.
 
 ## Provider registry (runtime-verified)
 
-Read from `providerDescriptors` at runtime on 2026-07-23.
+Read from `providerDescriptors` at runtime on 2026-07-23, and again on 2026-10-16
+for the two providers 0.9.0 added (`kartverket-tides`, `met-frost`).
 
 | Provider id          | Name                    | Access                  | `auth.requires`                   | Budget                    |
 | -------------------- | ----------------------- | ----------------------- | --------------------------------- | ------------------------- |
@@ -24,7 +30,9 @@ Read from `providerDescriptors` at runtime on 2026-07-23.
 | `geonorge`           | Geonorge / Kartverket   | open                    | —                                 | 30/min (courtesy)         |
 | `hvakosterstrommen`  | Hva koster strømmen?    | open                    | —                                 | 30/min (courtesy)         |
 | `kartverket`         | Kartverket              | open                    | —                                 | 60/min (courtesy)         |
+| `kartverket-tides`   | Kartverket Hydrographic | open                    | —                                 | 30/min (courtesy)         |
 | `met`                | MET Norway              | identification-required | `applicationName`, `contactEmail` | 60/min (courtesy)         |
+| `met-frost`          | MET Norway Frost        | registration-required   | `clientId` (HTTP Basic username)  | 30/min (courtesy)         |
 | `naturbase`          | Miljødirektoratet       | open                    | —                                 | 30/min (courtesy)         |
 | `nibio`              | NIBIO                   | open                    | —                                 | 20/min (courtesy)         |
 | `norges-bank`        | Norges Bank             | open                    | —                                 | 60/min (courtesy)         |
@@ -36,7 +44,7 @@ Read from `providerDescriptors` at runtime on 2026-07-23.
 
 Two consequences drive the configuration design:
 
-- `applicationName` is satisfiable by this package itself (`norway-open-data-mcp/0.4.0`),
+- `applicationName` is satisfiable by this package itself (`norway-open-data-mcp/0.5.0`),
   so Entur and Statens vegvesen work with **zero user setup**.
 - `contactEmail` cannot be invented. MET Norway is therefore the one provider that
   is genuinely user-configured, and it is the reference case for the
@@ -52,6 +60,84 @@ Two consequences drive the configuration design:
 - **Fiskeridirektoratet is two open descriptors**, one per register, and needs no
   credentials at all — which is why four of the eight maritime tools work with
   zero configuration.
+- **Frost is a client ID alone, not a client-credentials pair.** `met-frost`
+  takes `clientId` as the HTTP Basic username on its own API requests, with no
+  secret and no token endpoint, and the SDK sends it only to `frost.met.no`. This
+  server reads it from one variable, `NORWAY_MCP_MET_FROST_CLIENT_ID`, and checks
+  it against the SDK's own rule (printable ASCII without a colon) before use.
+- **The Hydrographic Service is anonymous** but its CC BY 4.0 licence requires a
+  credit, which the SDK carries in the response source's `attribution`.
+
+## Weather, tides and climate namespaces (0.9.0)
+
+Six tools: three MET Norway point tools gated on the contact email, the anonymous
+tide tool, the Frost history tool gated on the client ID, and the conditions
+profile, which works with no configuration and gains sections from both.
+
+### `weather` — `MetClient` (met)
+
+| Method                     | Purpose                                          | Cred    | Tool?                                                                                                                                       |
+| -------------------------- | ------------------------------------------------ | ------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `forecast(params)`         | Compact point forecast time series               | **yes** | **yes** — `get_norwegian_weather_forecast` (unchanged)                                                                                      |
+| `current(params)`          | First relevant time-series entry                 | **yes** | used inside `hours=1`; not a separate tool (unchanged)                                                                                      |
+| `getWarnings(params?)`     | Official MetAlerts warnings                      | **yes** | **yes** — `get_norwegian_weather_warnings`, and inside `get_weather_conditions_profile`                                                     |
+| `getNowcast(point)`        | Radar precipitation, ~2 h in 5-minute steps      | **yes** | **yes** — `get_norwegian_precipitation_nowcast`, and inside the profile                                                                     |
+| `getSunTimes(params)`      | Sunrise, sunset, solar noon and midnight         | **yes** | **yes** — `get_norwegian_sun_times`, and inside the profile                                                                                 |
+| `getMoonTimes(params)`     | Moonrise, moonset and phase                      | **yes** | no — little demand; it could become an option on `get_norwegian_sun_times` later rather than a tool of its own                              |
+| `getOceanForecast(point)`  | Sea temperature, waves and current, nearest cell | **yes** | inside the profile only — as a tool it overlaps `get_marine_forecast` (waves and currents) and would split that routing for no new question |
+| `getAirQualityForecast(p)` | Hourly air-quality index and pollutants          | **yes** | inside the profile only — MET versions the product 0.1 and the SDK marks it experimental, so it is not given a tool a model would rely on   |
+
+### `tides` — `TidesClient` (kartverket-tides)
+
+| Method                       | Purpose                                               | Cred | Tool?                                                                      |
+| ---------------------------- | ----------------------------------------------------- | ---- | -------------------------------------------------------------------------- |
+| `getTideTable(params)`       | Predicted high and low waters, ≤ 366 days             | no   | **yes** — `get_norwegian_tides` (window ≤ 168 h), and inside the profile   |
+| `getWaterLevels(params)`     | Observation, prediction, weather-effect and forecast  | no   | **yes** — `get_norwegian_tides` with `includeWaterLevels` (hourly, ≤ 48 h) |
+| `getReferenceLevels(params)` | Every datum, astronomical and return level at a point | no   | no — no user question needs it yet                                         |
+| `listStations()`             | Kartverket's permanent tide gauges                    | no   | no — no user question needs it yet; every result already names its station |
+
+The SDK's longest windows are 366 days for a tide table and 31 days hourly (7 at
+10 minutes) for water levels. This server's are a week and 48 hours, because a
+tool call returns one bounded result into a model's context window; they are
+this server's limits, not Kartverket's.
+
+### `climate` — `ClimateClient` (met-frost) — experimental
+
+| Method                           | Purpose                                         | Cred    | Tool?                                                                                     |
+| -------------------------------- | ----------------------------------------------- | ------- | ----------------------------------------------------------------------------------------- |
+| `searchStations(params)`         | Stations by id, name, area, element or nearness | **yes** | used by `get_norwegian_weather_history` and the profile; no tool of its own               |
+| `getObservations(params)`        | Observations for stations, elements and window  | **yes** | **yes** — `get_norwegian_weather_history` (hourly ≤ 4 days, daily ≤ 100 days)             |
+| `getClimateNormals(params)`      | Normals such as 1991–2020 monthly means         | **yes** | **yes** — `get_norwegian_weather_history` with `includeNormals`, and inside the profile   |
+| `getLatestObservations(params)`  | The most recent value per element               | **yes** | inside the profile only — "conditions now" is the profile's question, not a separate tool |
+| `getAvailableTimeSeries(params)` | Which series Frost holds                        | **yes** | no — expert discovery; the history tool's fixed element list makes it unnecessary         |
+
+Station search, time-series discovery and latest observations are not separate
+tools: each answers a step of a question the history tool or the profile already
+answers whole, and three more Frost tools would split routing for no new
+question. The SDK allows 31-day windows, or 366 days when every resolution is
+daily; this server's 96-hour and 100-day windows are its own, chosen to stay
+inside the 100-item array budget so no period is ever silently shortened.
+
+The SDK marks Frost experimental: its schemas follow Frost's published models and
+had not been verified against the live service when 0.9.0 shipped. The element
+IDs this server maps to are therefore confirmed by the opt-in live suite on its
+first credentialed run (see docs/test-plan.md).
+
+### `places.getMunicipalityAt()` — Kartverket Kommuneinfo
+
+| Method                      | Purpose                                       | Cred | Tool?                                                                                                                          |
+| --------------------------- | --------------------------------------------- | ---- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `getMunicipalityAt(params)` | The municipality whose boundary holds a point | no   | via `get_weather_conditions_profile` — on its own it overlaps `search_norwegian_addresses`, which already names a municipality |
+
+### `profiles.conditionsAtLocation()` — `ProfileClient` (cross-provider, experimental)
+
+Exposed whole as `get_weather_conditions_profile`. The SDK runs fourteen
+operations, skips a section as `not-configured` when its credentials are absent,
+`not-covered` when the point is outside a product's coverage, and `not-applicable`
+when a prerequisite (the municipality) is missing, and lists each real provider
+separately in `sources`. Reimplementing that fan-out here would duplicate the
+SDK's prerequisite logic and lose its omission reasons, so this server only
+bounds, projects and labels what the SDK returns.
 
 ## Geospatial namespaces (0.8.0)
 
@@ -168,12 +254,13 @@ Columns: **Tool?** = exposed as / used by an MCP tool.
 
 ### `profiles` — `ProfileClient` (cross-provider)
 
-| Method                | Purpose                                            | Input    | Cred    | Providers                         | Size     | Tool?                                          |
-| --------------------- | -------------------------------------------------- | -------- | ------- | --------------------------------- | -------- | ---------------------------------------------- |
-| `company(orgNr)`      | Company + official Kartverket coordinate match     | `string` | no      | brreg + kartverket                | 1 object | **yes** — `get_norwegian_company_profile`      |
-| `address(query)`      | Address + weather + hazards + roads                | `string` | partial | kartverket + met + nve + vegvesen | medium   | **yes** — `get_norwegian_location_profile`     |
-| `municipality(query)` | Population + life expectancy + companies + hazards | `string` | no      | ssb + fhi + brreg + nve           | medium   | **yes** — `get_norwegian_municipality_profile` |
-| `natureAtLocation(p)` | Five nature/land datasets + nearest place          | coords   | no      | naturbase + nibio + kartverket    | medium   | **yes** — `get_nature_profile`                 |
+| Method                    | Purpose                                            | Input    | Cred    | Providers                                             | Size     | Tool?                                          |
+| ------------------------- | -------------------------------------------------- | -------- | ------- | ----------------------------------------------------- | -------- | ---------------------------------------------- |
+| `company(orgNr)`          | Company + official Kartverket coordinate match     | `string` | no      | brreg + kartverket                                    | 1 object | **yes** — `get_norwegian_company_profile`      |
+| `address(query)`          | Address + weather + hazards + roads                | `string` | partial | kartverket + met + nve + vegvesen                     | medium   | **yes** — `get_norwegian_location_profile`     |
+| `municipality(query)`     | Population + life expectancy + companies + hazards | `string` | no      | ssb + fhi + brreg + nve                               | medium   | **yes** — `get_norwegian_municipality_profile` |
+| `natureAtLocation(p)`     | Five nature/land datasets + nearest place          | coords   | no      | naturbase + nibio + kartverket                        | medium   | **yes** — `get_nature_profile`                 |
+| `conditionsAtLocation(p)` | Weather, sea, daylight, warnings and observations  | coords   | partial | kartverket + met + nve + kartverket-tides + met-frost | medium   | **yes** — `get_weather_conditions_profile`     |
 
 `ProfileClient` degrades per section rather than failing: missing configuration
 yields a `not-configured` component, a failing provider yields `provider-error`.
@@ -181,11 +268,12 @@ yields a `not-configured` component, a failing provider yields `provider-error`.
 
 ### `addresses` / `places` — Kartverket
 
-| Method                     | Purpose                          | Input                                      | Cred | Size       | Tool?                                       |
-| -------------------------- | -------------------------------- | ------------------------------------------ | ---- | ---------- | ------------------------------------------- |
-| `addresses.search(params)` | Official address register search | query/municipality/county/postalCode/limit | no   | ≤1000/page | **yes** — `search_norwegian_addresses`      |
-| `places.search(params)`    | Official place-name search       | query/municipality/county/limit            | no   | ≤500/page  | no — overlaps address search for AI routing |
-| `places.nearby(params)`    | Place names near a coordinate    | lat/lon/radius≤5000/limit                  | no   | ≤500       | via `profiles.natureAtLocation()`           |
+| Method                        | Purpose                                   | Input                                      | Cred | Size       | Tool?                                       |
+| ----------------------------- | ----------------------------------------- | ------------------------------------------ | ---- | ---------- | ------------------------------------------- |
+| `addresses.search(params)`    | Official address register search          | query/municipality/county/postalCode/limit | no   | ≤1000/page | **yes** — `search_norwegian_addresses`      |
+| `places.search(params)`       | Official place-name search                | query/municipality/county/limit            | no   | ≤500/page  | no — overlaps address search for AI routing |
+| `places.nearby(params)`       | Place names near a coordinate             | lat/lon/radius≤5000/limit                  | no   | ≤500       | via `profiles.natureAtLocation()`           |
+| `places.getMunicipalityAt(p)` | Municipality whose boundary holds a point | lat/lon                                    | no   | 1 object   | via `profiles.conditionsAtLocation()`       |
 
 ### `weather` — `MetClient` (met)
 
@@ -193,6 +281,9 @@ yields a `not-configured` component, a failing provider yields `provider-error`.
 | ------------------ | ---------------------------------- | ---------------- | ------- | ---------------------- | --------------------------------------------------------- |
 | `forecast(params)` | Compact point forecast time series | lat/lon/altitude | **yes** | ~100 entries / 10 days | **yes** — `get_norwegian_weather_forecast` (hour-bounded) |
 | `current(params)`  | First relevant time-series entry   | lat/lon/altitude | **yes** | 1 entry                | used inside `hours=1`; not a separate tool                |
+
+The six methods 0.9.0 added to `weather` are in
+[Weather, tides and climate namespaces](#weather-tides-and-climate-namespaces-090).
 
 ### `hazards` — `NveHazardsClient` (nve)
 
@@ -273,21 +364,37 @@ evidence of statistical comparability.
 
 ### Namespaces deferred entirely
 
-| Namespace                 | Methods | Why deferred                                                                                                                  |
-| ------------------------- | ------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| `health` (fhi)            | 6       | Suppression-flag semantics need careful presentation; life expectancy is already surfaced by the municipality profile.        |
-| `catalog` (data-norge)    | 5       | Provider documents its search API as an internal, changeable interface. Deferred rather than shipped on an unstable contract. |
-| `currency` (norges-bank)  | 4       | Valuable but outside the "Norwegian public data" core intent; would add a 4th finance-shaped tool for little routing gain.    |
-| `energy` (nve)            | 4       | `getPowerPlants` returns the full national fleet — a poor output-budget fit without filters the SDK does not offer.           |
-| `parliament` (stortinget) | 9       | Strong candidate for a later release; cut to keep the tool set routable.                                                      |
-| `roads` (vegvesen)        | 7       | Surfaced indirectly through the location profile; standalone NVDB querying is expert-level.                                   |
-| `places` (kartverket)     | 2       | Routing overlap with address search. `places.nearby` is reached indirectly through the nature profile.                        |
+| Namespace                 | Methods | Why deferred                                                                                                                                       |
+| ------------------------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `health` (fhi)            | 6       | Suppression-flag semantics need careful presentation; life expectancy is already surfaced by the municipality profile.                             |
+| `catalog` (data-norge)    | 5       | Provider documents its search API as an internal, changeable interface. Deferred rather than shipped on an unstable contract.                      |
+| `currency` (norges-bank)  | 4       | Valuable but outside the "Norwegian public data" core intent; would add a 4th finance-shaped tool for little routing gain.                         |
+| `energy` (nve)            | 4       | `getPowerPlants` returns the full national fleet — a poor output-budget fit without filters the SDK does not offer.                                |
+| `parliament` (stortinget) | 9       | Strong candidate for a later release; cut to keep the tool set routable.                                                                           |
+| `roads` (vegvesen)        | 7       | Surfaced indirectly through the location profile; standalone NVDB querying is expert-level.                                                        |
+| `places` (kartverket)     | 3       | Routing overlap with address search. `places.nearby` is reached through the nature profile and `getMunicipalityAt` through the conditions profile. |
 
 ## Interpretation and safety limitations carried into tool docs
 
 - **Hazards are never an all-clear.** The SDK states this for both profiles and
   the hazards namespace. Every hazard-bearing tool result carries a standing
   warning to that effect, and the text rendering repeats it.
+- **MET Norway weather warnings are never an all-clear either, and are not
+  NVE's.** MetAlerts covers weather; flood, landslide and avalanche warnings are
+  NVE's. Its `rainFlood` and `stormSurge` events sound like NVE products, so the
+  warning tool and the hazards tool point at each other. A `Cancel` message
+  withdraws a warning and is shown as such.
+- **A product's coverage is an answer, not an error.** The nowcast is `undefined`
+  outside the Nordic radar area, which excludes Svalbard; the tide table is
+  `undefined` inland and far offshore; a polar day has no sunrise or sunset and
+  says why in `polarCondition`. Each becomes a `null` section with its reason.
+- **Tide values are modelled away from a permanent gauge** from a reference
+  station's prediction scaled by `factor` and shifted by `delayMinutes`, and every
+  result names them, the reference level and that times are UTC.
+- **Frost observations are never filled or interpolated**, an empty result means
+  no data for that station and window, and normals are labelled with their
+  period. The SDK withholds Frost's station-holder names, and this server
+  whitelists station fields so none can come back.
 - **FHI suppression flags must stay suppressed.** Surfaced via the municipality
   profile's `lifeExpectancy.flag` / `flagMeaning`; never reconstructed.
 - **Electricity is a third-party derived API**, not an official government

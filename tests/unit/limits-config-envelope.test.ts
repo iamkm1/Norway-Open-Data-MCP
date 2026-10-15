@@ -278,11 +278,12 @@ describe("configuration", () => {
       NORWAY_MCP_BARENTSWATCH_CLIENT_SECRET: "bw-client-secret",
       NORWAY_MCP_BARENTSWATCH_AIS_CLIENT_ID: "ais-client-id",
       NORWAY_MCP_BARENTSWATCH_AIS_CLIENT_SECRET: "ais-client-secret",
+      NORWAY_MCP_MET_FROST_CLIENT_ID: "frost-client-id",
     });
 
     // OAuth2 client ids are redacted alongside the secrets: a client id is not
     // a password, but it identifies a registered client and has no place in a
-    // tool result or a log line.
+    // tool result or a log line. The Frost client ID is Frost's whole credential.
     expect(secretsOf(config)).toEqual([
       "ola@example.com",
       "key-123456",
@@ -290,7 +291,50 @@ describe("configuration", () => {
       "bw-client-secret",
       "ais-client-id",
       "ais-client-secret",
+      "frost-client-id",
     ]);
+  });
+
+  it("reads a Frost client ID as one value, with no secret to pair it with", () => {
+    // `readCredentialPair` would drop an id that has no secret; Frost has none.
+    const { config, problems } = resolveConfig({
+      NORWAY_MCP_MET_FROST_CLIENT_ID: "  0f4e2b8c-1d3a-4c5e-9f00-000000000001  ",
+    });
+
+    expect(config.metFrostClientId).toBe("0f4e2b8c-1d3a-4c5e-9f00-000000000001");
+    expect(problems).toEqual([]);
+  });
+
+  it.each([
+    ["a colon, which would end an HTTP Basic username", "frost:id"],
+    ["an inner space", "frost id"],
+    ["a non-ASCII character", "frøst-id"],
+  ])("drops a Frost client ID containing %s and reports it", (_label, value) => {
+    const { config, problems } = resolveConfig({ NORWAY_MCP_MET_FROST_CLIENT_ID: value });
+
+    expect(config.metFrostClientId).toBeUndefined();
+    expect(problems).toEqual([
+      {
+        variable: "NORWAY_MCP_MET_FROST_CLIENT_ID",
+        message: expect.stringContaining("Not a valid Frost client ID") as string,
+      },
+    ]);
+    // The problem names the variable, never the value.
+    expect(JSON.stringify(problems)).not.toContain(value);
+  });
+
+  it("treats a blank Frost client ID as unset and masks a set one in the doctor view", () => {
+    expect(resolveConfig({ NORWAY_MCP_MET_FROST_CLIENT_ID: "   " }).config.metFrostClientId).toBe(
+      undefined,
+    );
+
+    const { config } = resolveConfig({ NORWAY_MCP_MET_FROST_CLIENT_ID: "frost-secret-id" });
+    const described = describeConfig(config);
+    expect(described["NORWAY_MCP_MET_FROST_CLIENT_ID"]).toBe("(set, masked)");
+    expect(JSON.stringify(described)).not.toContain("frost-secret-id");
+    expect(describeConfig(resolveConfig({}).config)["NORWAY_MCP_MET_FROST_CLIENT_ID"]).toBe(
+      "(not set)",
+    );
   });
 
   it("refuses a half-configured OAuth2 pair rather than failing at the token endpoint", () => {

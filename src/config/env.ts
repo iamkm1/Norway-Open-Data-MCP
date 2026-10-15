@@ -26,6 +26,14 @@ const APP_NAME_MAX = 120;
  */
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@.]+(?:\.[^\s@.]+)+$/;
 
+/**
+ * The SDK's own rule for a Frost client ID: printable ASCII without a colon,
+ * because the ID travels as an HTTP Basic username and a colon would end it.
+ * Checked here so a malformed value is reported against the variable rather
+ * than surfacing later as the SDK's `credentials["met-frost"]` wording.
+ */
+const FROST_CLIENT_ID_PATTERN = /^[\x21-\x39\x3b-\x7e]+$/;
+
 function readTrimmed(env: EnvSource, key: string): string | undefined {
   const raw = env[key];
   if (typeof raw !== "string") return undefined;
@@ -155,6 +163,24 @@ export function resolveConfig(env: EnvSource = process.env): ConfigResolution {
     problems,
   );
 
+  // A single value, so `readTrimmed` rather than `readCredentialPair`: the pair
+  // reader would drop a client ID that has no secret, and Frost has none.
+  const rawFrostClientId = readTrimmed(env, ENV_VARS.metFrostClientId);
+  let metFrostClientId: string | undefined;
+  if (rawFrostClientId !== undefined) {
+    if (FROST_CLIENT_ID_PATTERN.test(rawFrostClientId)) {
+      metFrostClientId = rawFrostClientId;
+    } else {
+      // Dropped, as a bad email is: the tools that need it then report one
+      // clear error naming this variable instead of an SDK credential path.
+      problems.push({
+        variable: ENV_VARS.metFrostClientId,
+        message:
+          "Not a valid Frost client ID: it must be printable ASCII with no spaces or colons. Frost tools stay disabled until it is corrected.",
+      });
+    }
+  }
+
   const config: ServerConfig = {
     applicationName,
     contactEmail,
@@ -163,6 +189,7 @@ export function resolveConfig(env: EnvSource = process.env): ConfigResolution {
     barentswatchClientSecret: barentswatch.clientSecret,
     barentswatchAisClientId: barentswatchAis.clientId,
     barentswatchAisClientSecret: barentswatchAis.clientSecret,
+    metFrostClientId,
     timeoutMs: readInteger(env, ENV_VARS.timeoutMs, 10_000, TIMEOUT_RANGE, problems),
     retries: readInteger(env, ENV_VARS.retries, 2, RETRIES_RANGE, problems),
     cacheEnabled: readBoolean(env, ENV_VARS.cache, true, problems),
@@ -177,7 +204,8 @@ export function resolveConfig(env: EnvSource = process.env): ConfigResolution {
  *
  * OAuth2 client ids are included alongside the secrets. A client id is not a
  * password, but it identifies a registered client and the SDK redacts it for
- * the same reason: it has no place in a tool result or a log line.
+ * the same reason: it has no place in a tool result or a log line. The Frost
+ * client ID is the whole credential for Frost, so it is held to the same rule.
  */
 export function secretsOf(config: ServerConfig): (string | undefined)[] {
   return [
@@ -187,6 +215,7 @@ export function secretsOf(config: ServerConfig): (string | undefined)[] {
     config.barentswatchClientSecret,
     config.barentswatchAisClientId,
     config.barentswatchAisClientSecret,
+    config.metFrostClientId,
   ];
 }
 
@@ -206,6 +235,7 @@ export function describeConfig(config: ServerConfig): Record<string, string> {
     [ENV_VARS.barentswatchAisClientSecret]: config.barentswatchAisClientSecret
       ? "(set, masked)"
       : "(not set)",
+    [ENV_VARS.metFrostClientId]: config.metFrostClientId ? "(set, masked)" : "(not set)",
     [ENV_VARS.timeoutMs]: String(config.timeoutMs),
     [ENV_VARS.retries]: String(config.retries),
     [ENV_VARS.cache]: config.cacheEnabled ? "enabled (in-process only)" : "disabled",

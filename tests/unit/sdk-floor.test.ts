@@ -15,6 +15,11 @@
  *   `profiles.natureAtLocation()`, which the eight geospatial tools call
  *   directly, plus `OpenDataResponse.sources` — the array the profile tools now
  *   union into their provenance. On 0.7.0 none of that exists.
+ * - 0.9.0 added `weather.getWarnings`, `getNowcast` and `getSunTimes`, the
+ *   `sdk.tides` and `sdk.climate` namespaces, Frost's `met-frost` client-ID
+ *   credential and `profiles.conditionsAtLocation()`, which the six weather,
+ *   tide and climate tools call directly. On 0.8.0 those methods are missing,
+ *   so the tools would fail with a `TypeError` at call time.
  *
  * The SDK is pre-1.0, so its breaking (and feature) changes ship as minor
  * versions and a caret range does not float across them automatically — the
@@ -29,7 +34,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
-const REQUIRED_MINIMUM = "0.8.0";
+const REQUIRED_MINIMUM = "0.9.0";
 const SDK = "norway-open-data-sdk";
 
 const repoFile = (relative: string): string =>

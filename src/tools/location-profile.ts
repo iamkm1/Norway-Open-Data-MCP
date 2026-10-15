@@ -225,7 +225,8 @@ export const locationProfileTool: ToolDefinition<typeof inputSchema, Data> = {
     "Do not use this when choosing between several addresses or when only a postal code is needed " +
     "(search_norwegian_addresses), when a multi-hour forecast for a coordinate is wanted " +
     "(get_norwegian_weather_forecast), or when nationwide warnings are wanted " +
-    "(get_current_norwegian_hazards).",
+    "(get_current_norwegian_hazards). For a bare coordinate's weather, sea and daylight " +
+    "conditions without an address, use get_weather_conditions_profile.",
   inputSchema,
   dataSchema,
   handler,

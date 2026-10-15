@@ -204,7 +204,7 @@ describe("credential gating", () => {
     expect((site.data["site"] as { siteNumber: string }).siteNumber).toBe("10318");
   });
 
-  it("gates exactly five tools, and no more", () => {
+  it("gates exactly nine tools, and no more", () => {
     // The README states this count. Deriving it from the registry keeps the
     // claim from drifting the next time a tool is added.
     const gated = allTools
@@ -215,11 +215,17 @@ describe("credential gating", () => {
     expect(gated).toEqual([
       "get_live_vessel_positions",
       "get_marine_forecast",
+      "get_norwegian_precipitation_nowcast",
+      "get_norwegian_sun_times",
       "get_norwegian_weather_forecast",
+      "get_norwegian_weather_history",
+      "get_norwegian_weather_warnings",
       "get_vessel_profile",
       "get_vessel_track",
     ]);
-    expect(allTools.length - gated.length).toBe(EXPECTED_TOOL_COUNT - 5);
+    // Twenty-five of the thirty-four work with no configuration at all.
+    expect(allTools.length - gated.length).toBe(EXPECTED_TOOL_COUNT - 9);
+    expect(allTools.length - gated.length).toBe(25);
   });
 
   it("leaves every pre-existing tool working when no maritime credentials are set", async () => {

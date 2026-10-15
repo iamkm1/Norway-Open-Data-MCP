@@ -16,8 +16,27 @@
  *    reported to the model as an upstream outage.
  */
 
+import { ENV_VARS } from "../config/types.js";
 import type { Redactor } from "./redact.js";
 import type { ToolErrorCode, ToolErrorField, ToolErrorPayload } from "./types.js";
+
+/**
+ * SDK configuration errors whose wording names a code-level credential path.
+ *
+ * `norway-open-data-sdk@0.9.0` reports a missing or malformed Frost client ID as
+ * `credentials["met-frost"].clientId`, which is how a program configures the
+ * SDK — not something a user of this server can set. The error is rewritten to
+ * name the environment variable instead. Only Frost needs this: every other
+ * credential-bearing tool is gated on its variables before the SDK is reached.
+ */
+const CONFIGURATION_BY_PROVIDER: Record<string, { variables: string[]; message: string }> = {
+  "met-frost": {
+    variables: [ENV_VARS.metFrostClientId],
+    message:
+      `MET Norway Frost needs a free client ID. Set ${ENV_VARS.metFrostClientId} to a Frost ` +
+      "client ID (printable ASCII, no spaces or colons) from https://frost.met.no/auth/requestCredentials.html.",
+  },
+};
 
 /** Structural view of an SDK error; avoids depending on class identity. */
 type SdkErrorShape = {
@@ -63,6 +82,21 @@ export class UpstreamNotFoundError extends Error {
     super(message);
     this.name = "NotFoundError";
     this.provider = provider;
+  }
+}
+
+/**
+ * Raised by a handler for input only the clock can judge, such as a start date
+ * in the future. A schema cannot see the injected clock, so the check runs in
+ * the handler, before any provider is contacted.
+ *
+ * Named `InputValidationError`, like the SDK's own, so it maps through the same
+ * table and carries the same field-level detail.
+ */
+export class InvalidToolInputError extends Error {
+  constructor(path: string, message: string) {
+    super(message, { cause: { issues: [{ path: [path], message }] } });
+    this.name = "InputValidationError";
   }
 }
 
@@ -187,6 +221,19 @@ export function mapToolError(error: unknown, options: MapToolErrorOptions): Tool
       message: `The server failed to complete the request${name ? ` (${redactor.text(name)})` : ""}.`,
       retryable: false,
     };
+  }
+
+  if (code === "missing_configuration" && provider !== undefined) {
+    const translated = CONFIGURATION_BY_PROVIDER[provider];
+    if (translated !== undefined) {
+      return {
+        code,
+        message: translated.message,
+        retryable: false,
+        provider,
+        requiredConfiguration: [...translated.variables],
+      };
+    }
   }
 
   const rawMessage = readString(shape.message) ?? "The provider request failed.";

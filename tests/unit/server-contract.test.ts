@@ -11,6 +11,8 @@ import { createHarness, type Harness } from "../helpers/harness.js";
 import {
   EXPECTED_TOOL_COUNT,
   PRE_GEOSPATIAL_TOOL_ORDER,
+  PRE_WEATHER_TOOL_ORDER,
+  WEATHER_TOOL_NAMES,
   allTools,
 } from "../../src/tools/registry.js";
 import { PACKAGE_NAME, PACKAGE_VERSION } from "../../src/version.js";
@@ -39,7 +41,58 @@ describe("tool registry", () => {
 
     expect(tools).toHaveLength(EXPECTED_TOOL_COUNT);
     expect(allTools).toHaveLength(EXPECTED_TOOL_COUNT);
-    expect(EXPECTED_TOOL_COUNT).toBe(28);
+    expect(EXPECTED_TOOL_COUNT).toBe(34);
+  });
+
+  it("keeps all twenty-eight pre-weather tools in their published order", async () => {
+    // The weather, tide and climate tools are appended, so every one of the
+    // twenty-eight names an existing client indexed keeps its position.
+    harness = await createHarness({ sdk: createFakeSdk() });
+    const { tools } = await harness.client.listTools();
+    const names = tools.map((tool) => tool.name);
+
+    expect(PRE_WEATHER_TOOL_ORDER).toHaveLength(28);
+    expect(names.slice(0, PRE_WEATHER_TOOL_ORDER.length)).toEqual([...PRE_WEATHER_TOOL_ORDER]);
+    expect(allTools.slice(0, PRE_WEATHER_TOOL_ORDER.length).map((tool) => tool.name)).toEqual([
+      ...PRE_WEATHER_TOOL_ORDER,
+    ]);
+  });
+
+  it("registers the six weather, tide and climate tools exactly once each, after the existing set", async () => {
+    harness = await createHarness({ sdk: createFakeSdk() });
+    const { tools } = await harness.client.listTools();
+    const names = tools.map((tool) => tool.name);
+
+    const weather = [
+      "get_norwegian_weather_warnings",
+      "get_norwegian_precipitation_nowcast",
+      "get_norwegian_sun_times",
+      "get_norwegian_tides",
+      "get_norwegian_weather_history",
+      "get_weather_conditions_profile",
+    ];
+
+    expect([...WEATHER_TOOL_NAMES]).toEqual(weather);
+    expect(names.slice(PRE_WEATHER_TOOL_ORDER.length)).toEqual(weather);
+    for (const name of weather) {
+      expect(
+        names.filter((entry) => entry === name),
+        name,
+      ).toHaveLength(1);
+    }
+  });
+
+  it("exposes the weather, tides, climate and conditions surface on the injectable SDK", () => {
+    const sdk = createFakeSdk();
+    expect(typeof sdk.weather.getWarnings).toBe("function");
+    expect(typeof sdk.weather.getNowcast).toBe("function");
+    expect(typeof sdk.weather.getSunTimes).toBe("function");
+    expect(typeof sdk.tides.getTideTable).toBe("function");
+    expect(typeof sdk.tides.getWaterLevels).toBe("function");
+    expect(typeof sdk.climate.searchStations).toBe("function");
+    expect(typeof sdk.climate.getObservations).toBe("function");
+    expect(typeof sdk.climate.getClimateNormals).toBe("function");
+    expect(typeof sdk.profiles.conditionsAtLocation).toBe("function");
   });
 
   it("keeps the twenty pre-geospatial tools in their published order", async () => {
@@ -74,7 +127,9 @@ describe("tool registry", () => {
       "get_nature_profile",
     ];
 
-    expect(names.slice(PRE_GEOSPATIAL_TOOL_ORDER.length)).toEqual(geospatial);
+    expect(
+      names.slice(PRE_GEOSPATIAL_TOOL_ORDER.length, PRE_GEOSPATIAL_TOOL_ORDER.length + 8),
+    ).toEqual(geospatial);
     for (const name of geospatial) {
       expect(
         names.filter((entry) => entry === name),
@@ -382,7 +437,45 @@ describe("doctor", () => {
     expect(text).toContain(
       "get_marine_forecast: needs NORWAY_MCP_BARENTSWATCH_CLIENT_ID, NORWAY_MCP_BARENTSWATCH_CLIENT_SECRET",
     );
+    // The three MET Norway weather tools need the contact email, Frost needs its
+    // client ID, and the tides tool and the conditions profile need nothing.
+    for (const name of [
+      "get_norwegian_weather_warnings",
+      "get_norwegian_precipitation_nowcast",
+      "get_norwegian_sun_times",
+    ]) {
+      expect(text).toContain(`${name}: needs NORWAY_MCP_CONTACT_EMAIL`);
+    }
+    expect(text).toContain("get_norwegian_weather_history: needs NORWAY_MCP_MET_FROST_CLIENT_ID");
+    expect(text).toContain("get_norwegian_tides: ready");
+    expect(text).toContain("get_weather_conditions_profile: ready");
+    // The notes name what each missing value disables, tool by tool.
+    expect(text).toContain("get_norwegian_weather_warnings,");
+    expect(text).toContain("get_weather_conditions_profile will omit its MET Norway sections");
+    expect(text).toContain("NORWAY_MCP_MET_FROST_CLIENT_ID is not set");
     expect(text).toContain("No network requests were made");
+  });
+
+  it("masks the Frost client ID and marks the history tool ready once it is set", () => {
+    const report = buildDoctorReport({
+      NORWAY_MCP_MET_FROST_CLIENT_ID: "frost-client-id-abcdef",
+    });
+
+    const text = report.lines.join("\n");
+    expect(text).not.toContain("frost-client-id-abcdef");
+    expect(text).toContain("NORWAY_MCP_MET_FROST_CLIENT_ID: (set, masked)");
+    expect(text).toContain("get_norwegian_weather_history: ready");
+    expect(text).not.toContain("NORWAY_MCP_MET_FROST_CLIENT_ID is not set");
+  });
+
+  it("reports a malformed Frost client ID as a configuration problem without printing it", () => {
+    const report = buildDoctorReport({ NORWAY_MCP_MET_FROST_CLIENT_ID: "bad:frost-id" });
+
+    const text = report.lines.join("\n");
+    expect(text).toContain("Configuration problems");
+    expect(text).toContain("NORWAY_MCP_MET_FROST_CLIENT_ID: Not a valid Frost client ID");
+    expect(text).not.toContain("bad:frost-id");
+    expect(text).toContain("get_norwegian_weather_history: needs NORWAY_MCP_MET_FROST_CLIENT_ID");
   });
 
   it("masks BarentsWatch credentials rather than printing them", () => {
@@ -412,7 +505,12 @@ describe("doctor", () => {
 
   it("marks every tool ready once a contact email is configured", () => {
     const report = buildDoctorReport({ NORWAY_MCP_CONTACT_EMAIL: "ola@example.com" });
-    expect(report.lines.join("\n")).toContain("get_norwegian_weather_forecast: ready");
+    const text = report.lines.join("\n");
+    expect(text).toContain("get_norwegian_weather_forecast: ready");
+    expect(text).toContain("get_norwegian_weather_warnings: ready");
+    expect(text).toContain("get_norwegian_precipitation_nowcast: ready");
+    expect(text).toContain("get_norwegian_sun_times: ready");
+    expect(text).not.toContain("NORWAY_MCP_CONTACT_EMAIL is not set");
   });
 
   it("surfaces configuration problems", () => {

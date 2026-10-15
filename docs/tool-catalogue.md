@@ -1,7 +1,8 @@
 # Tool catalogue
 
-Twenty-eight curated read-only tools. Tool names are stable, language-neutral
-identifiers and are never translated.
+Thirty-four curated read-only tools. Tool names are stable, language-neutral
+identifiers and are never translated. Tools 29–34 were appended in 0.5.0; the
+first twenty-eight keep their names and their order.
 
 Conventions used below:
 
@@ -150,7 +151,8 @@ place — combining location, conditions and warnings in a single answer.
 **Do not use this when** the user is choosing between addresses or only needs a
 postal code (`search_norwegian_addresses`), wants a multi-day forecast for a
 coordinate (`get_norwegian_weather_forecast`), or wants nationwide warnings
-(`get_current_norwegian_hazards`).
+(`get_current_norwegian_hazards`). A bare coordinate's weather, sea and daylight
+picture, with no address to resolve, is `get_weather_conditions_profile`.
 
 **Input** `query` — required, 2–200 non-blank chars.
 
@@ -217,7 +219,9 @@ today, tonight, the next few days.
 avalanche or landslide — that is `get_current_norwegian_hazards`, a different
 provider answering a different question. For weather at a _street address_
 rather than a coordinate, `get_norwegian_location_profile` resolves the address
-first.
+first. MET Norway's own weather warnings are `get_norwegian_weather_warnings`,
+rain in the next two hours is `get_norwegian_precipitation_nowcast`, and what the
+weather _was_ is `get_norwegian_weather_history`.
 
 **Input**
 
@@ -259,6 +263,8 @@ avalanche (`snøskred`), landslide (`jordskred`/`skredfare`) or Varsom.
 **Do not use this when** the user wants temperature, rain or wind — that is
 `get_norwegian_weather_forecast`. For warnings tied to one specific address, the
 administrative-area match in `get_norwegian_location_profile` is more precise.
+MET Norway's weather warnings — wind, gale, rain, snow, storm surge — are
+`get_norwegian_weather_warnings`, a different provider.
 
 **Input**
 
@@ -815,7 +821,8 @@ conditions on the water rather than in the air.
 
 **Do not use this when** the question is about wind, air temperature or
 precipitation (`get_norwegian_weather_forecast`) or official danger warnings
-(`get_current_norwegian_hazards`).
+(`get_current_norwegian_hazards`). Tides and water levels are
+`get_norwegian_tides`.
 
 **Input**
 
@@ -1251,6 +1258,329 @@ rate limit, timeout, cancellation.
 
 ---
 
+## 29. `get_norwegian_weather_warnings`
+
+**Title:** Get MET Norway weather warnings
+**SDK:** `weather.getWarnings()` · **Provider:** MET Norway (MetAlerts 2.0) · **Config:** **required** — `NORWAY_MCP_CONTACT_EMAIL`
+
+**Description.** MET Norway's current official weather warnings (farevarsler) —
+wind, gale, rain, snow, ice, icing, storm surge, forest-fire danger, lightning and
+polar lows — for a coordinate, a county or all of Norway, each with its awareness
+level and colour, validity window and message type.
+
+**Use this when** the user asks whether a weather warning applies somewhere: a
+yellow, orange or red warning, gale or storm (kuling, storm, ekstremvær), heavy
+rain or snow, or storm surge.
+
+**Do not use this when** the question is about flood, landslide or avalanche
+warnings — NVE issues those, through `get_current_norwegian_hazards`. MET's
+`rainFlood` and `stormSurge` warnings describe the rain and the water level and
+sound like NVE products, so both descriptions point at the other tool and both
+tools should be checked when flooding is the question. Do not use it for the
+forecast itself (`get_norwegian_weather_forecast`).
+
+**Input**
+
+| Field              | Type               | Default | Limit                                       |
+| ------------------ | ------------------ | ------- | ------------------------------------------- |
+| `latitude`         | number             | —       | −90…90, finite; only with `longitude`       |
+| `longitude`        | number             | —       | −180…180, finite; only with `latitude`      |
+| `countyCode`       | string             | —       | exactly 2 digits; not combined with a point |
+| `event`            | enum               | —       | the 12 MetAlerts event types                |
+| `geographicDomain` | `land` \| `marine` | —       | —                                           |
+| `language`         | `no` \| `en`       | `no`    | —                                           |
+| `includeGeometry`  | boolean            | `false` | —                                           |
+
+A point, a county, or neither — neither returns every current warning in Norway.
+A point and a county together are refused: MetAlerts already selects the
+warnings whose area contains the point. `riskMatrixColor` is not exposed.
+
+**Output** `{ query{scope,…}, lastChange?, language, warnings[], totalWarnings, cancelledCount }`.
+Each warning carries `id`, `event`, `eventName?`, `title`, `area`, `description`,
+`instruction?`, `consequences?`, `awarenessLevel{level,color,severity}`,
+`riskMatrixColor?`, `severity`, `certainty`, `messageType` (`Alert`, `Update` or
+`Cancel`), `status`, `response?`, `seriousness?`, `triggerLevel?`,
+`geographicDomain?`, `countyCodes[]`, `municipalityCodes[]`, `incidentName?`,
+`onset?`, `expires?`, `eventEndingTime?`, `web?`, `geometry|null` and
+`geometrySummary`.
+**Budget** at most 50 warnings, in MetAlerts' order; text fields clamped to 1,000
+chars; geometry whole or not at all under the shared 4,000-vertex budget (see
+§Geometry) · typical 3–40 KB without geometry.
+**Warnings** the standing not-an-all-clear notice naming NVE's tool; a specific
+"MET Norway returned no current warnings" note on an empty list; a cancellation
+note whenever a `Cancel` message is present; the NVE pointer whenever `rainFlood`
+or `stormSurge` appears; geometry omissions; the 50-warning cut with how to
+narrow it.
+**Errors** `missing_configuration` naming `NORWAY_MCP_CONTACT_EMAIL`; provider
+failure, rate limit, timeout, cancellation.
+
+**Positive example.** "Er det farevarsel for vind i Vestland i dag?" →
+`{ countyCode: "46", event: "wind" }`.
+**Routes elsewhere.** "Er det flomvarsel for Gudbrandsdalen?" →
+`get_current_norwegian_hazards`.
+
+---
+
+## 30. `get_norwegian_precipitation_nowcast`
+
+**Title:** Get MET Norway precipitation nowcast
+**SDK:** `weather.getNowcast()` · **Provider:** MET Norway · **Config:** **required** — `NORWAY_MCP_CONTACT_EMAIL`
+
+**Description.** Radar-based precipitation for roughly the next two hours in
+five-minute steps, with current temperature and wind and the radar status.
+
+**Use this when** the user asks whether it will rain in the next hour or two,
+when rain will start or stop, or whether it is raining now.
+
+**Do not use this when** the horizon is longer than about two hours or a
+multi-day outlook is wanted (`get_norwegian_weather_forecast`), or for warnings
+(`get_norwegian_weather_warnings`).
+
+**Input** `latitude`, `longitude` — required, finite, in range.
+
+**Output** `{ requested, coverage: "covered"|"outside-radar-area", nowcast{updatedAt?, coordinates, radarCoverage?, entries[]}|null }`.
+**Budget** at most 30 steps (MET publishes about 25) · typical 2–5 KB.
+**Coverage** a point outside the Nordic radar area — which excludes Svalbard — is
+`nowcast: null` with `coverage: "outside-radar-area"` and a plain reason. It is
+not an error, and the reason names the hourly forecast as the alternative.
+**Warnings** the two-hour scope note; a radar note when `radarCoverage` is not
+`ok`, because precipitation is then unreliable.
+**Errors** `missing_configuration`; provider failure, rate limit, timeout,
+cancellation.
+
+**Positive example.** "Will it start raining in the next half hour at 59.91, 10.75?"
+**Routes elsewhere.** "What's the weather tomorrow?" →
+`get_norwegian_weather_forecast`.
+
+---
+
+## 31. `get_norwegian_sun_times`
+
+**Title:** Get sunrise and sunset times
+**SDK:** `weather.getSunTimes()` · **Provider:** MET Norway · **Config:** **required** — `NORWAY_MCP_CONTACT_EMAIL`
+
+**Description.** Sunrise, sunset, solar noon and solar midnight for a coordinate
+and date, in the Europe/Oslo offset for that date, including midnight sun and
+polar night.
+
+**Use this when** the user asks when the sun rises or sets, how long the day is,
+or about midnight sun or polar night (midnattssol, mørketid).
+
+**Do not use this when** the question is about the weather (cloud cover, rain) —
+`get_norwegian_weather_forecast`.
+
+**Input**
+
+| Field       | Type             | Default             | Limit              |
+| ----------- | ---------------- | ------------------- | ------------------ |
+| `latitude`  | number, required | —                   | −90…90, finite     |
+| `longitude` | number, required | —                   | −180…180, finite   |
+| `date`      | `YYYY-MM-DD`     | today (Europe/Oslo) | real calendar date |
+
+The date default is resolved by this server from its clock, so a call is
+reproducible.
+
+**Output** `{ date, coordinates, sunrise{time,azimuth?}|null, sunset|null, solarNoon{time,elevation?,visible?}|null, solarMidnight|null, polarCondition: "midnight-sun"|"polar-night"|null }`.
+**Budget** one date · typical <1 KB.
+**Polar days.** A day with neither sunrise nor sunset carries `polarCondition`,
+and the result says that this is the answer, not missing data. A day missing only
+one of the two without a polar condition is explained too.
+**Warnings** the Oslo-offset note; the polar note when it applies.
+**Errors** `missing_configuration`; provider failure, rate limit, timeout,
+cancellation.
+
+**Positive example.** "Når går sola ned i Bodø i dag?" →
+`{ latitude: 67.28, longitude: 14.4 }`.
+
+---
+
+## 32. `get_norwegian_tides`
+
+**Title:** Get Norwegian tides and water levels
+**SDK:** `tides.getTideTable()`, optionally `tides.getWaterLevels()` · **Provider:** Kartverket Hydrographic Service · **Config:** none
+
+**Description.** Predicted high and low tides for a point on the Norwegian coast
+over the next hours or days, optionally with hourly observed, predicted,
+weather-effect and forecast water levels.
+
+**Use this when** the user asks about high or low tide (flo, fjære, tidevann),
+the water level or storm-surge levels at a harbour or shore.
+
+**Do not use this when** the question is about waves, swell or sea currents
+(`get_marine_forecast`) or about weather.
+
+**Input**
+
+| Field                | Type                                          | Default       | Limit                |
+| -------------------- | --------------------------------------------- | ------------- | -------------------- |
+| `latitude`           | number, required                              | —             | −90…90, finite       |
+| `longitude`          | number, required                              | —             | −180…180, finite     |
+| `hours`              | integer                                       | 48            | 1–168                |
+| `referenceLevel`     | `chart-datum` \| `mean-sea-level` \| `nn2000` | `chart-datum` | —                    |
+| `includeWaterLevels` | boolean                                       | `false`       | hourly, first ≤ 48 h |
+
+The window is built by this server from its clock — `from` is now and `to` is
+`hours` later, both ISO-8601 in UTC — so no caller-supplied window is accepted.
+Water levels cover the first `min(hours, 48)` hours and say so when shortened.
+They are requested only when the tide table shows the point is covered.
+
+**Output** `{ requested, window{from,to,hours}, referenceLevel, covered, tideTable{location, referenceLevel, unit, serviceMessages[], events[]}|null, waterLevels{window, location, referenceLevel, serviceMessages[], series[]}|null }`.
+`location` is the reference station the values were modelled from — `name`,
+`code`, `factor?`, `delayMinutes?` and the surge gauge — and each water-level
+series keeps its own `type` (`observation`, `prediction`, `weathereffect`,
+`forecast`); forecast values carry the uncertainty band.
+**Budget** 60 events (a week is about 28); 6 series of at most 60 values;
+10 service messages · typical 1–10 KB.
+**Coverage** an inland or far-offshore point is `covered: false` with a null
+table — not an error.
+**Partial** non-null only when the water-level request **failed**; the tide table
+is still returned.
+**Warnings** times are UTC; the reference-level note (chart datum is not mean sea
+level); the modelled-values note; the 48-hour water-level window when shortened;
+the forecast uncertainty note.
+**Attribution** the SDK's Hydrographic Service credit (CC BY 4.0), in the envelope
+and the rendered text.
+**Errors** provider failure, rate limit, timeout, cancellation.
+
+**Positive example.** "When is high tide in Bergen harbour tomorrow?" →
+`{ latitude: 60.398, longitude: 5.32, hours: 48 }`.
+**Routes elsewhere.** "How big are the waves off Stad?" → `get_marine_forecast`.
+
+---
+
+## 33. `get_norwegian_weather_history`
+
+**Title:** Get Norwegian weather history (Frost)
+**SDK:** `climate.searchStations()` → `climate.getObservations()`, optionally `climate.getClimateNormals()` · **Provider:** MET Norway Frost · **Config:** **required** — `NORWAY_MCP_MET_FROST_CLIENT_ID` · **Experimental**
+
+**Description.** Past observations at the nearest weather station to a coordinate,
+or at a given Frost station, optionally beside the station's 1991–2020 monthly
+normals.
+
+**Use this when** the user asks what the weather was — how cold it got, how much
+rain fell, how a period compared with normal.
+
+**Do not use this when** the question is about what will happen
+(`get_norwegian_weather_forecast`) or conditions right now
+(`get_weather_conditions_profile`).
+
+**Input**
+
+| Field            | Type                   | Default                | Limit                                               |
+| ---------------- | ---------------------- | ---------------------- | --------------------------------------------------- |
+| `latitude`       | number                 | —                      | with `longitude`; instead of `stationId`            |
+| `longitude`      | number                 | —                      | with `latitude`                                     |
+| `stationId`      | string                 | —                      | `SN` + digits, no sensor suffix; instead of a point |
+| `resolution`     | `hourly` \| `daily`    | `daily`                | —                                                   |
+| `startDate`      | `YYYY-MM-DD`, required | —                      | real date; not after today (Europe/Oslo)            |
+| `endDate`        | `YYYY-MM-DD`           | = `startDate`          | ≥ `startDate`; hourly ≤ 4 days, daily ≤ 100 days    |
+| `elements`       | enum[]                 | all for the resolution | 1–5 unique, valid for the resolution                |
+| `includeNormals` | boolean                | `false`                | —                                                   |
+
+Exactly one of a point or `stationId`. Dates are whole UTC days: Frost is asked
+from `startDate`T00:00Z up to, but not including, the day after `endDate`. The
+element list is fixed and mapped to Frost element IDs:
+
+| Resolution | Element                | Frost element ID                 |
+| ---------- | ---------------------- | -------------------------------- |
+| hourly     | `air_temperature`      | `air_temperature`                |
+| hourly     | `wind_speed`           | `wind_speed`                     |
+| hourly     | `relative_humidity`    | `relative_humidity`              |
+| hourly     | `precipitation`        | `sum(precipitation_amount PT1H)` |
+| daily      | `mean_air_temperature` | `mean(air_temperature P1D)`      |
+| daily      | `min_air_temperature`  | `min(air_temperature P1D)`       |
+| daily      | `max_air_temperature`  | `max(air_temperature P1D)`       |
+| daily      | `precipitation`        | `sum(precipitation_amount P1D)`  |
+| daily      | `max_wind_gust`        | `max(wind_speed_of_gust P1D)`    |
+| normals    | `mean_air_temperature` | `mean(air_temperature P1M)`      |
+| normals    | `precipitation`        | `sum(precipitation_amount P1M)`  |
+
+The IDs follow Frost's documentation; no Frost client ID was available when this
+release was built, so they are confirmed by the opt-in live suite on its first
+credentialed run.
+
+**Output** `{ station{id,name,distanceKm?,elevationMetres?,latitude?,longitude?,municipality?,county?,validFrom?,validTo?}, selectedBy, window{startDate,endDate,from,to,resolution,timeResolution}, elements[{element,elementId}], records[{referenceTime, observations[{element?,elementId,value,unit?,timeOffset?,timeResolution?,qualityCode?}]}], recordCount, normals{period,months[],values[]}|null }`.
+**Budget** at most 100 records (4 hourly days is 96; 100 daily days is 100) and 20
+values per record · typical 5–40 KB.
+**No gap filling.** Values are exactly as Frost published them. A missing hour or
+day is a gap, never a zero, and is never filled or interpolated. `[]` means no
+data for that station and window, not an error. Normals are labelled with their
+period.
+**Partial** non-null only when the normals request **failed**; the observations
+are still returned.
+**Privacy** station fields are whitelisted; Frost's station-holder names, which
+the SDK already withholds, can never be added back.
+**Warnings** the experimental note; the no-gap-filling note; the UTC window; for a
+point, that the station is the nearest one reporting every element, plus a
+distance note beyond 25 km (the SDK's own threshold); the empty-window note; the
+normals note.
+**Errors** `missing_configuration` naming `NORWAY_MCP_MET_FROST_CLIENT_ID` —
+including when the SDK rejects the ID, never the SDK's
+`credentials["met-frost"]` wording; `invalid_input` for a future `startDate`;
+`not_found` for an unknown station or a point with no qualifying station;
+provider failure, rate limit, timeout, cancellation.
+
+**Positive example.** "How cold did it get at Blindern in the first week of
+January 2026?" → `{ stationId: "SN18700", startDate: "2026-01-01", endDate: "2026-01-07", elements: ["min_air_temperature"] }`.
+**Routes elsewhere.** "Will it be cold tomorrow?" → `get_norwegian_weather_forecast`.
+
+---
+
+## 34. `get_weather_conditions_profile`
+
+**Title:** Get weather and sea conditions for a coordinate
+**SDK:** `profiles.conditionsAtLocation()` · **Providers:** Kartverket + MET Norway + NVE + Kartverket Hydrographic Service + MET Norway Frost · **Config:** none (optional `NORWAY_MCP_CONTACT_EMAIL`, `NORWAY_MCP_MET_FROST_CLIENT_ID`) · **Experimental**
+
+**Description.** One coordinate's weather, sea and daylight conditions from
+several agencies at once: the containing municipality, MET Norway's forecast,
+nowcast, weather warnings, sun times, ocean forecast and air quality, NVE flood,
+avalanche and landslide warnings for the municipality, the tide table and the
+latest observations at the nearest Frost station.
+
+**Use this when** the user asks broadly what conditions are like at a place now or
+over the next hours.
+
+**Do not use this when** the subject is a street address
+(`get_norwegian_location_profile` resolves it and adds roads), one product in full
+detail such as an hourly forecast (`get_norwegian_weather_forecast`), or a past
+period (`get_norwegian_weather_history`).
+
+**Input** `latitude`, `longitude` — required; `hours` — integer 1–48, default 12,
+for the forecast, ocean and air-quality sections. The tide table always covers at
+least 24 hours.
+
+**Output** `{ location, municipality|null, forecast[]|null, nowcast|null, weatherWarnings[]|null, hazards[]|null, hazardMatchEvidence[], sun|null, ocean|null, tides|null, airQuality|null, observations{station, latest[], monthlyTemperatureNormal|null}|null, compositeSource, components[] }`.
+A `null` section was not asked for, is not covered at this point, or failed —
+`components` says which, per operation (`not-configured`, `not-covered`,
+`not-applicable`, `not-found`, `provider-error`).
+**Budget** forecast, ocean and air quality ≤ 48 entries; 20 MET warnings (without
+their areas; tool 29 returns those); 20 NVE warnings; 30 nowcast steps; 60 tide
+events; 10 latest records; 14 components; 20 SDK notices · typical 10–40 KB.
+**Partial** `partial.missing` lists each section omitted as `not-configured` or
+`provider-error`, as `"section: reason"`. `not-covered`, `not-found` and
+`not-applicable` are answers — no tide table inland, no nowcast on Svalbard — so
+they are explained in the warnings and `components`, and do not make a result
+partial. With no configuration the MET and Frost sections are listed here, and
+the municipality, NVE warnings and tides still answer.
+**Warnings** the SDK's own `warnings` (its notices: provider failures, radar
+status, a distant station) merged verbatim; the experimental note; both
+never-an-all-clear notices; the warning-area note; the ocean-cell, tide and
+air-quality notes; one line per omitted component, naming the variable to set.
+`weatherWarnings` are data, never merged into the envelope's warnings.
+**Attribution** never the SDK's synthetic composite (kept as `compositeSource`):
+`sources` is the union of the available components and the SDK's `sources`, so
+`met` and `met-frost` are separate entries and NVE's three feeds keep their own
+required wording.
+**Errors** `provider_error` when the SDK reports every provider failed; rate limit,
+timeout, cancellation.
+
+**Positive example.** "What are conditions like right now at 68.23, 14.56?" →
+`{ latitude: 68.23, longitude: 14.56 }`.
+**Routes elsewhere.** "Hvordan er det ved Storgata 1 i Tromsø?" →
+`get_norwegian_location_profile`.
+
+---
+
 ## Geometry
 
 Feature geometry is the largest payload this server can produce, so it is
@@ -1278,6 +1608,11 @@ all.**
   carries 19,403 vertices across 63 rings. No setting of these constants could
   fit that into one MCP payload, which is why the guard is explicit and reported
   rather than hidden.
+- `get_norwegian_weather_warnings` applies the same rule and the same budgets to
+  MET Norway's warning areas. MetAlerts may publish any GeoJSON type — Point,
+  MultiPoint, LineString, Polygon or MultiPolygon — so its summary reports
+  `partCount` for whichever type arrives, and the polygon-only schema of the
+  Naturbase and NIBIO tools is left unchanged.
 
 ## Coordinate reference systems
 
@@ -1317,32 +1652,44 @@ and tell the user where it is. They just do not fetch it.
 
 Pairs deliberately separated by wording, and the discriminator used:
 
-| Pair     | Discriminator                                                     |
-| -------- | ----------------------------------------------------------------- |
-| 1 vs 2   | Do you have a 9-digit organization number?                        |
-| 3 vs 4   | Choosing _which_ address vs. conditions _at_ an address           |
-| 4 vs 6   | Street address vs. bare coordinate; single current vs. multi-hour |
-| 6 vs 7   | Forecast (temperature/rain/wind) vs. official danger warning      |
-| 5 vs 10  | Ready-made municipality answer vs. custom table breakdown         |
-| 8 vs 10  | Hourly spot price vs. energy statistics                           |
-| 9 vs 3   | Transit stop vs. street address                                   |
-| 5 vs 11  | Municipality statistics vs. did this code change over time        |
-| 11 vs 12 | Did a code change over time vs. look a code up in a list          |
-| 10 vs 12 | Statistics numbers vs. official classification code list          |
-| 13 vs 14 | One vessel now (identity + position) vs. its movement over time   |
-| 14 vs 15 | A known vessel's history vs. unknown vessels in an area right now |
-| 15 vs 13 | Area sweep with no vessel named vs. one MMSI already in hand      |
-| 16 vs 17 | Several candidates by description vs. one exact identifier        |
-| 18 vs 19 | Discover sites by area or holder vs. one known site number        |
-| 20 vs 6  | Conditions on the water (waves, current) vs. in the air (wind)    |
-| 21 vs 22 | Which datasets exist vs. the terms of one known record            |
-| 21 vs 7  | Catalogue metadata about hazards vs. a live hazard warning        |
-| 23 vs 24 | One coordinate vs. a bounded rectangle                            |
-| 23 vs 25 | Legal protection vs. surveyed habitat                             |
-| 25 vs 27 | Mapped nature locality vs. generalized land cover                 |
-| 26 vs 23 | Distance from infrastructure vs. legal protection                 |
-| 28 vs 23 | Several datasets at once vs. one dataset in full detail           |
-| 28 vs 27 | Combined nature overview vs. land classification alone            |
+| Pair     | Discriminator                                                       |
+| -------- | ------------------------------------------------------------------- |
+| 1 vs 2   | Do you have a 9-digit organization number?                          |
+| 3 vs 4   | Choosing _which_ address vs. conditions _at_ an address             |
+| 4 vs 6   | Street address vs. bare coordinate; single current vs. multi-hour   |
+| 6 vs 7   | Forecast (temperature/rain/wind) vs. official danger warning        |
+| 5 vs 10  | Ready-made municipality answer vs. custom table breakdown           |
+| 8 vs 10  | Hourly spot price vs. energy statistics                             |
+| 9 vs 3   | Transit stop vs. street address                                     |
+| 5 vs 11  | Municipality statistics vs. did this code change over time          |
+| 11 vs 12 | Did a code change over time vs. look a code up in a list            |
+| 10 vs 12 | Statistics numbers vs. official classification code list            |
+| 13 vs 14 | One vessel now (identity + position) vs. its movement over time     |
+| 14 vs 15 | A known vessel's history vs. unknown vessels in an area right now   |
+| 15 vs 13 | Area sweep with no vessel named vs. one MMSI already in hand        |
+| 16 vs 17 | Several candidates by description vs. one exact identifier          |
+| 18 vs 19 | Discover sites by area or holder vs. one known site number          |
+| 20 vs 6  | Conditions on the water (waves, current) vs. in the air (wind)      |
+| 21 vs 22 | Which datasets exist vs. the terms of one known record              |
+| 21 vs 7  | Catalogue metadata about hazards vs. a live hazard warning          |
+| 23 vs 24 | One coordinate vs. a bounded rectangle                              |
+| 23 vs 25 | Legal protection vs. surveyed habitat                               |
+| 25 vs 27 | Mapped nature locality vs. generalized land cover                   |
+| 26 vs 23 | Distance from infrastructure vs. legal protection                   |
+| 28 vs 23 | Several datasets at once vs. one dataset in full detail             |
+| 28 vs 27 | Combined nature overview vs. land classification alone              |
+| 29 vs 7  | MET weather warning vs. NVE flood, landslide or avalanche warning   |
+| 29 vs 6  | A warning vs. a forecast                                            |
+| 30 vs 6  | The next two hours in five-minute steps vs. a multi-hour forecast   |
+| 33 vs 6  | What happened vs. what will happen                                  |
+| 32 vs 20 | Tide and water level vs. waves and currents                         |
+| 34 vs 4  | A coordinate's weather, sea and sun vs. a street address with roads |
+| 34 vs 6  | An overview vs. a single forecast                                   |
+| 33 vs 34 | A past period vs. conditions now                                    |
+
+29 vs 7 is the main risk of the weather release: MetAlerts' `rainFlood` and
+`stormSurge` sound like NVE products, so each description names the other tool,
+and the corpus asks both directions in both languages.
 
 These are exercised directly by the evaluation corpus in
 `tests/eval/tool-routing.json`.

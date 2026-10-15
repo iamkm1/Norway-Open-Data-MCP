@@ -17,8 +17,12 @@ import type {
   AquacultureSite,
   AquacultureSiteSearchResult,
   AutocompletePlace,
+  ClimateNormal,
+  ClimateObservationRecord,
+  ClimateStation,
   CompanyProfile,
   CompanySearchResult,
+  ConditionsAtLocationProfile,
   Departure,
   ElectricityPrice,
   FisheriesVesselSearchResult,
@@ -37,6 +41,7 @@ import type {
   NaturbaseFeatureResult,
   NatureAtLocationProfile,
   NatureTypeFeature,
+  Nowcast,
   OpenDataResponse,
   OpenDataSource,
   ProposedProtectedAreaFeature,
@@ -44,9 +49,15 @@ import type {
   SeaCurrentForecast,
   StatisticsResult,
   StatisticsTableMetadata,
+  SunTimes,
+  TideLocation,
+  TideTable,
   VesselProfile,
+  WaterLevels,
   WaveForecast,
   WeatherForecast,
+  WeatherWarning,
+  WeatherWarningCollection,
 } from "norway-open-data-sdk";
 
 import type { NorwayOpenDataLike } from "../tools/types.js";
@@ -64,7 +75,7 @@ export const SOURCES: Record<string, OpenDataSource> = {
     id: "kartverket",
     name: "Kartverket",
     homepage: "https://www.kartverket.no/en",
-    documentation: "https://ws.geonorge.no/adresser/v1/",
+    documentation: "https://ws.geonorge.no/",
     license: "See Geonorge dataset-specific terms and licences",
     attribution: "Attribute Kartverket where required by the selected dataset.",
   },
@@ -72,7 +83,7 @@ export const SOURCES: Record<string, OpenDataSource> = {
     id: "met",
     name: "MET Norway",
     homepage: "https://www.met.no/en",
-    documentation: "https://api.met.no/weatherapi/locationforecast/2.0/documentation",
+    documentation: "https://api.met.no/doc/",
     license: "NLOD 2.0 and CC BY 4.0 unless the product states otherwise",
     attribution: "Credit the Norwegian Meteorological Institute as required by its terms.",
   },
@@ -192,6 +203,38 @@ export const SOURCES: Record<string, OpenDataSource> = {
     license: "Norwegian Licence for Open Government Data (NLOD) 1.0",
     attribution: "Kilde: NIBIO.",
   },
+  /** Copied verbatim from the `norway-open-data-sdk@0.9.0` provider registry. */
+  "kartverket-tides": {
+    id: "kartverket-tides",
+    name: "Kartverket Hydrographic Service",
+    homepage: "https://www.kartverket.no/til-sjos/se-havniva",
+    documentation: "https://vannstand.kartverket.no/tideapi_en.html",
+    license: "Creative Commons Attribution 4.0 International (CC BY 4.0)",
+    attribution: "Credit the Norwegian Mapping Authority, Hydrographic Service (Kartverket).",
+  },
+  /** Copied verbatim from the `norway-open-data-sdk@0.9.0` provider registry. */
+  "met-frost": {
+    id: "met-frost",
+    name: "MET Norway Frost",
+    homepage: "https://frost.met.no/",
+    documentation: "https://frost.met.no/api.html",
+    license:
+      "Creative Commons Attribution 3.0 Norway (CC BY 3.0 NO), as declared in Frost responses",
+    attribution: "Credit the Norwegian Meteorological Institute (MET Norway) as its terms require.",
+  },
+  /**
+   * NVE's Varsom flood feed as the conditions profile credits it: the same
+   * provider id with the feed's own required wording, exactly as
+   * `norway-open-data-sdk@0.9.0` attaches it to that component.
+   */
+  "nve-flood": {
+    id: "nve",
+    name: "Norwegian Water Resources and Energy Directorate (NVE)",
+    homepage: "https://www.nve.no/",
+    documentation: "https://api.nve.no/doc/",
+    license: "Norwegian Licence for Open Government Data (NLOD) 2.0",
+    attribution: "Varsler fra Flomvarslingen i Norge og www.varsom.no",
+  },
 };
 
 /**
@@ -221,6 +264,20 @@ export const COMPOSITE_PROFILE_SOURCES: Record<string, OpenDataSource> = {
     name: "Miljødirektoratet / Naturbase, NIBIO and Kartverket",
     homepage: "https://github.com/iamkm1/Norway-Open-Data",
     documentation: "https://github.com/iamkm1/Norway-Open-Data#cross-provider-nature-profile",
+  },
+  /** What `profiles.conditionsAtLocation()` builds when every contributor answers (SDK 0.9.0). */
+  conditions: {
+    id: "met+nve+kartverket+kartverket-tides+met-frost",
+    name: "MET Norway, NVE, Kartverket, Kartverket Hydrographic Service and MET Norway Frost",
+    homepage: "https://github.com/iamkm1/Norway-Open-Data",
+    documentation: "https://github.com/iamkm1/Norway-Open-Data#cross-provider-conditions-profile",
+  },
+  /** The same profile with no MET identity and no Frost client ID. */
+  "conditions-anonymous": {
+    id: "nve+kartverket+kartverket-tides",
+    name: "NVE, Kartverket and Kartverket Hydrographic Service",
+    homepage: "https://github.com/iamkm1/Norway-Open-Data",
+    documentation: "https://github.com/iamkm1/Norway-Open-Data#cross-provider-conditions-profile",
   },
 };
 
@@ -301,6 +358,8 @@ export type FakeSdkOverrides = {
   geodata?: Partial<NorwayOpenDataLike["geodata"]>;
   environment?: Partial<NorwayOpenDataLike["environment"]>;
   land?: Partial<NorwayOpenDataLike["land"]>;
+  tides?: Partial<NorwayOpenDataLike["tides"]>;
+  climate?: Partial<NorwayOpenDataLike["climate"]>;
 };
 
 /**
@@ -317,10 +376,17 @@ export function createFakeSdk(overrides: FakeSdkOverrides = {}): NorwayOpenDataL
       municipality: notImplemented("profiles.municipality"),
       vessel: notImplemented("profiles.vessel"),
       natureAtLocation: notImplemented("profiles.natureAtLocation"),
+      conditionsAtLocation: notImplemented("profiles.conditionsAtLocation"),
       ...overrides.profiles,
     },
     addresses: { search: notImplemented("addresses.search"), ...overrides.addresses },
-    weather: { forecast: notImplemented("weather.forecast"), ...overrides.weather },
+    weather: {
+      forecast: notImplemented("weather.forecast"),
+      getWarnings: notImplemented("weather.getWarnings"),
+      getNowcast: notImplemented("weather.getNowcast"),
+      getSunTimes: notImplemented("weather.getSunTimes"),
+      ...overrides.weather,
+    },
     hazards: {
       getFloodWarnings: notImplemented("hazards.getFloodWarnings"),
       getAvalancheWarnings: notImplemented("hazards.getAvalancheWarnings"),
@@ -383,6 +449,17 @@ export function createFakeSdk(overrides: FakeSdkOverrides = {}): NorwayOpenDataL
     land: {
       getLandResourcesAt: notImplemented("land.getLandResourcesAt"),
       ...overrides.land,
+    },
+    tides: {
+      getTideTable: notImplemented("tides.getTideTable"),
+      getWaterLevels: notImplemented("tides.getWaterLevels"),
+      ...overrides.tides,
+    },
+    climate: {
+      searchStations: notImplemented("climate.searchStations"),
+      getObservations: notImplemented("climate.getObservations"),
+      getClimateNormals: notImplemented("climate.getClimateNormals"),
+      ...overrides.climate,
     },
   };
 }
@@ -1457,3 +1534,543 @@ export const samplePartialVesselProfile: VesselProfile = {
     },
   ],
 };
+
+// ---------------------------------------------------------------------------
+// Weather, tides and climate (SDK 0.9.0)
+// ---------------------------------------------------------------------------
+
+/** A land wind warning whose area is a polygon with one hole. */
+export const sampleWeatherWarning: WeatherWarning = {
+  id: "2.49.0.1.578.0.20260723080000.001",
+  event: "wind",
+  eventName: "Vind",
+  title: "Vind, gult nivå, Vestland, 23 juli 08:00 UTC til 23 juli 20:00 UTC.",
+  area: "Vestland",
+  description: "Sørvestlig sterk kuling 20 m/s. I utsatte områder vindkast på 30 m/s.",
+  instruction: "Sikre løse gjenstander. Vær forberedt på forsinkelser i trafikken.",
+  consequences: "Løse gjenstander kan bli tatt av vinden. Enkelte veier kan bli stengt.",
+  awarenessLevel: { level: 2, color: "yellow", severity: "Moderate" },
+  awarenessType: { code: 1, name: "wind" },
+  riskMatrixColor: "yellow",
+  severity: "Moderate",
+  certainty: "Likely",
+  messageType: "Alert",
+  status: "Actual",
+  response: "Vær forberedt",
+  seriousness: "Utfordrende situasjon",
+  triggerLevel: "20.8 m/s",
+  geographicDomain: "land",
+  countyCodes: ["46"],
+  municipalityCodes: ["4601", "4626", "4627"],
+  onset: "2026-07-23T08:00:00+00:00",
+  expires: "2026-07-23T20:00:00+00:00",
+  eventEndingTime: "2026-07-23T20:00:00+00:00",
+  web: "https://www.met.no/vaer-og-klima/farevarsel-og-ekstremvaer",
+  resources: [
+    {
+      uri: "https://api.met.no/weatherapi/metalerts/2.0/current?cap=2.49.0.1.578.0.20260723080000.001",
+      description: "CAP file",
+      mimeType: "application/xml",
+    },
+  ],
+  geometry: {
+    type: "Polygon",
+    coordinates: [
+      [
+        [4.8, 60.2],
+        [5.6, 60.2],
+        [5.6, 60.6],
+        [4.8, 60.6],
+        [4.8, 60.2],
+      ],
+      [
+        [5.1, 60.3],
+        [5.2, 60.3],
+        [5.2, 60.4],
+        [5.1, 60.3],
+      ],
+    ],
+  },
+};
+
+/** A marine storm-surge warning for a named event, as a two-part multipolygon. */
+export const sampleStormSurgeWarning: WeatherWarning = {
+  id: "2.49.0.1.578.0.20260723090000.002",
+  event: "stormSurge",
+  eventName: "Stormflo",
+  title: "Stormflo, oransje nivå, Kyststrekningen Stad–Svenskegrensa.",
+  area: "Kyststrekningen Stad–Svenskegrensa",
+  description: "Vannstanden kan bli 50 cm over normalt tidevann.",
+  awarenessLevel: { level: 3, color: "orange", severity: "Severe" },
+  severity: "Severe",
+  certainty: "Likely",
+  messageType: "Update",
+  status: "Actual",
+  geographicDomain: "marine",
+  countyCodes: [],
+  municipalityCodes: [],
+  incidentName: "Testuværet",
+  onset: "2026-07-23T12:00:00+00:00",
+  expires: "2026-07-24T06:00:00+00:00",
+  resources: [],
+  geometry: {
+    type: "MultiPolygon",
+    coordinates: [
+      [
+        [
+          [5.0, 59.0],
+          [6.0, 59.0],
+          [6.0, 59.5],
+          [5.0, 59.0],
+        ],
+      ],
+      [
+        [
+          [7.0, 58.0],
+          [8.0, 58.0],
+          [8.0, 58.5],
+          [7.0, 58.0],
+        ],
+      ],
+    ],
+  },
+};
+
+/** A cancellation: a message that withdraws an earlier rain-flood warning. */
+export const sampleCancelledWarning: WeatherWarning = {
+  id: "2.49.0.1.578.0.20260723100000.003",
+  event: "rainFlood",
+  title: "Regnflom, gult nivå, Agder. Varselet er kansellert.",
+  area: "Agder",
+  description: "Varselet er kansellert.",
+  awarenessLevel: { level: 2, color: "yellow", severity: "Moderate" },
+  severity: "Moderate",
+  certainty: "Possible",
+  messageType: "Cancel",
+  status: "Actual",
+  countyCodes: ["42"],
+  municipalityCodes: [],
+  resources: [],
+  geometry: null,
+};
+
+export const sampleWeatherWarnings: WeatherWarningCollection = {
+  lastChange: "2026-07-23T09:41:12+00:00",
+  language: "no",
+  warnings: [sampleWeatherWarning, sampleStormSurgeWarning, sampleCancelledWarning],
+};
+
+export const sampleNowcast: Nowcast = {
+  updatedAt: "2026-07-23T09:55:00Z",
+  coordinates: { latitude: 59.9139, longitude: 10.7522, altitude: 23 },
+  radarCoverage: "ok",
+  entries: Array.from({ length: 25 }, (_unused, index) => ({
+    time: new Date(Date.UTC(2026, 6, 23, 10, index * 5)).toISOString(),
+    precipitationRate: index < 6 ? 0 : 1.2,
+    ...(index === 0
+      ? {
+          temperature: 18.4,
+          apparentTemperature: 18.1,
+          humidity: 81,
+          windSpeed: 3.1,
+          windGust: 6.5,
+          windDirection: 210,
+          uvIndexClearSky: 3.2,
+          symbolCode: "rain",
+          precipitationNextHour: 0.6,
+        }
+      : {}),
+  })),
+};
+
+export const sampleSunTimes: SunTimes = {
+  date: "2026-07-23",
+  coordinates: { latitude: 59.9139, longitude: 10.7522 },
+  sunrise: { time: "2026-07-23T04:38+02:00", azimuth: 40.2 },
+  sunset: { time: "2026-07-23T22:12+02:00", azimuth: 319.7 },
+  solarNoon: { time: "2026-07-23T13:25+02:00", elevation: 51.8, visible: true },
+  solarMidnight: { time: "2026-07-23T01:25+02:00", elevation: -12.7, visible: false },
+};
+
+/** Tromsø at midsummer: no sunrise and no sunset, by design. */
+export const sampleMidnightSunTimes: SunTimes = {
+  date: "2026-06-21",
+  coordinates: { latitude: 69.6492, longitude: 18.9553 },
+  solarNoon: { time: "2026-06-21T12:43+02:00", elevation: 43.8, visible: true },
+  solarMidnight: { time: "2026-06-21T00:43+02:00", elevation: 3.2, visible: true },
+  polarCondition: "midnight-sun",
+};
+
+/** Tromsø at midwinter. */
+export const samplePolarNightSunTimes: SunTimes = {
+  date: "2026-12-21",
+  coordinates: { latitude: 69.6492, longitude: 18.9553 },
+  solarNoon: { time: "2026-12-21T11:39+01:00", elevation: -2.6, visible: false },
+  solarMidnight: { time: "2026-12-21T23:39+01:00", elevation: -46.8, visible: false },
+  polarCondition: "polar-night",
+};
+
+/** A point in Bergen harbour, modelled from the Bergen gauge. */
+export const sampleTideLocation: TideLocation = {
+  name: "Bergen",
+  code: "BGO",
+  latitude: 60.398,
+  longitude: 5.32,
+  factor: 1,
+  delayMinutes: 0,
+  surgeStationName: "Bergen",
+  surgeStationCode: "BGO",
+  description: "Tidevannet er beregnet fra Bergen.",
+};
+
+export const sampleTideTable: TideTable = {
+  location: sampleTideLocation,
+  referenceLevel: "CD",
+  unit: "cm",
+  serviceMessages: [],
+  events: [
+    { time: "2026-07-23T11:42:00+00:00", value: 152.3, kind: "high" },
+    { time: "2026-07-23T17:55:00+00:00", value: 61, kind: "low" },
+    { time: "2026-07-24T00:08:00+00:00", value: 148.9, kind: "high" },
+    { time: "2026-07-24T06:20:00+00:00", value: 58.4, kind: "low" },
+  ],
+};
+
+const hourlyLevels = (count: number, base: number) =>
+  Array.from({ length: count }, (_unused, index) => ({
+    time: new Date(Date.UTC(2026, 6, 23, 10 + index)).toISOString(),
+    value: Number((base + Math.sin(index / 2) * 40).toFixed(1)),
+  }));
+
+export const sampleWaterLevels: WaterLevels = {
+  location: sampleTideLocation,
+  referenceLevel: "CD",
+  serviceMessages: ["Vannstandsmåleren i Bergen leverer forsinkede data."],
+  series: [
+    {
+      type: "observation",
+      unit: "cm",
+      quality: { flag: 1, class: "1", description: "Kontrollerte data" },
+      values: hourlyLevels(3, 110).map((value) => ({ ...value, flag: "obs" })),
+    },
+    {
+      type: "prediction",
+      unit: "cm",
+      values: hourlyLevels(24, 108).map((value) => ({ ...value, flag: "pre" })),
+    },
+    { type: "weathereffect", unit: "cm", values: hourlyLevels(24, 4) },
+    {
+      type: "forecast",
+      unit: "cm",
+      values: hourlyLevels(24, 112).map((value) => ({
+        ...value,
+        flag: "forecast",
+        uncertainty: {
+          lowerPercentile: value.value - 12,
+          lowPercentile: value.value - 6,
+          highPercentile: value.value + 6,
+          higherPercentile: value.value + 12,
+        },
+      })),
+    },
+  ],
+};
+
+/** Frost's station at Blindern, as `climate.searchStations` normalizes it. */
+export const sampleClimateStation: ClimateStation = {
+  id: "SN18700",
+  name: "OSLO - BLINDERN",
+  shortName: "Blindern",
+  countryCode: "NO",
+  wmoId: 1492,
+  wigosId: "0-20000-0-01492",
+  coordinates: { latitude: 59.9423, longitude: 10.72 },
+  elevationMetres: 94,
+  distanceKm: 3.4,
+  validFrom: "1937-01-01T00:00:00.000Z",
+  county: "OSLO",
+  countyId: 3,
+  municipality: "OSLO",
+  municipalityId: 301,
+  externalIds: ["01492"],
+  icaoCodes: [],
+};
+
+const DAILY_LEVEL = { type: "height_above_ground", unit: "m", value: 2 };
+
+export const sampleDailyObservations: ClimateObservationRecord[] = [1, 2, 3].map((day) => ({
+  stationId: "SN18700:0",
+  referenceTime: `2026-01-0${day}T00:00:00.000Z`,
+  coordinates: { latitude: 59.9423, longitude: 10.72 },
+  observations: [
+    {
+      elementId: "mean(air_temperature P1D)",
+      value: -4 - day / 10,
+      unit: "degC",
+      level: DAILY_LEVEL,
+      timeOffset: "PT0H",
+      timeResolution: "P1D",
+      timeSeriesId: 0,
+      performanceCategory: "C",
+      exposureCategory: "2",
+      qualityCode: 0,
+    },
+    {
+      elementId: "sum(precipitation_amount P1D)",
+      value: day === 2 ? 0 : 1.4 * day,
+      unit: "mm",
+      timeOffset: "PT6H",
+      timeResolution: "P1D",
+      qualityCode: 0,
+    },
+  ],
+}));
+
+export const sampleHourlyObservations: ClimateObservationRecord[] = Array.from(
+  { length: 3 },
+  (_unused, hour) => ({
+    stationId: "SN18700:0",
+    referenceTime: new Date(Date.UTC(2026, 6, 20, hour)).toISOString(),
+    observations: [
+      { elementId: "air_temperature", value: 14.1 + hour, unit: "degC", timeOffset: "PT0H" },
+    ],
+  }),
+);
+
+/**
+ * Monthly 1991–2020 normals for both elements, one day-of-month normal and one
+ * month Frost holds no value for, so the tool's selection rules are exercised.
+ */
+export const sampleClimateNormals: ClimateNormal[] = [
+  ...Array.from({ length: 12 }, (_unused, index) => ({
+    stationId: "SN18700",
+    elementId: "mean(air_temperature P1M)",
+    period: "1991/2020",
+    month: index + 1,
+    normal: Number((5.7 + Math.sin(((index - 3) / 12) * 2 * Math.PI) * 10).toFixed(1)),
+  })),
+  ...Array.from({ length: 12 }, (_unused, index) => ({
+    stationId: "SN18700",
+    elementId: "sum(precipitation_amount P1M)",
+    period: "1991/2020",
+    month: index + 1,
+    ...(index === 1 ? {} : { normal: 60 + index * 3 }),
+  })),
+  {
+    stationId: "SN18700",
+    elementId: "mean(air_temperature P1M)",
+    period: "1991/2020",
+    month: 1,
+    day: 15,
+    normal: -4.4,
+  },
+];
+
+type ConditionsComponent = ConditionsAtLocationProfile["components"][number];
+
+const conditionsAvailable = (
+  operation: ConditionsComponent["operation"],
+  section: ConditionsComponent["section"],
+  source: OpenDataSource,
+): ConditionsComponent => ({
+  operation,
+  section,
+  status: "available",
+  source,
+  retrievedAt: "2026-07-23T12:00:00.000Z",
+  cached: false,
+});
+
+const conditionsOmitted = (
+  operation: ConditionsComponent["operation"],
+  section: ConditionsComponent["section"],
+  source: OpenDataSource,
+  reason: "not-configured" | "not-applicable" | "not-covered" | "not-found",
+): ConditionsComponent => ({ operation, section, status: "omitted", source, reason });
+
+/** NVE's avalanche feed as the conditions profile credits it. */
+const NVE_AVALANCHE: OpenDataSource = {
+  ...SOURCES["nve"]!,
+  attribution: "Varsler fra Snøskredvarslingen i Norge og www.varsom.no",
+};
+/** NVE's landslide feed as the conditions profile credits it. */
+const NVE_LANDSLIDE: OpenDataSource = {
+  ...SOURCES["nve"]!,
+  attribution: "Varsler fra Jordskredvarslingen i Norge og www.varsom.no",
+};
+
+/** Bergen with every provider configured and answering: all fourteen components available. */
+export const sampleConditionsProfile: ConditionsAtLocationProfile = {
+  location: { latitude: 60.398, longitude: 5.32 },
+  municipality: {
+    municipalityCode: "4601",
+    municipalityName: "Bergen",
+    countyCode: "46",
+    countyName: "Vestland",
+  },
+  forecast: sampleForecast.timeseries.slice(0, 12),
+  nowcast: sampleNowcast,
+  weatherWarnings: [sampleWeatherWarning],
+  hazards: [sampleHazard],
+  hazardMatches: [
+    {
+      warning: sampleHazard,
+      matchBasis: "county-code",
+      addressArea: { code: "46", name: "Vestland" },
+      warningArea: { code: "46", name: "Vestland" },
+    },
+  ],
+  sun: sampleSunTimes,
+  ocean: {
+    updatedAt: "2026-07-23T06:00:00Z",
+    coordinates: { latitude: 60.4, longitude: 5.3 },
+    entries: Array.from({ length: 12 }, (_unused, index) => ({
+      time: new Date(Date.UTC(2026, 6, 23, 10 + index)).toISOString(),
+      seaTemperature: 15.2,
+      waveHeight: 0.4,
+      waveFromDirection: 240,
+      currentSpeed: 0.12,
+      currentToDirection: 35,
+    })),
+  },
+  tides: sampleTideTable,
+  airQuality: {
+    referenceTime: "2026-07-23T00:00:00Z",
+    area: {
+      name: "Bergen sentrum",
+      areaClass: "grunnkrets",
+      areaCode: "46010101",
+      path: "/Vestland/Bergen/Bergen sentrum",
+      latitude: 60.39,
+      longitude: 5.32,
+    },
+    parentArea: {
+      name: "Bergen",
+      areaClass: "kommune",
+      areaCode: "4601",
+      latitude: 60.39,
+      longitude: 5.32,
+    },
+    entries: Array.from({ length: 12 }, (_unused, index) => ({
+      from: new Date(Date.UTC(2026, 6, 23, 10 + index)).toISOString(),
+      to: new Date(Date.UTC(2026, 6, 23, 11 + index)).toISOString(),
+      index: 1,
+      no2: { concentration: 12.5, index: 1 },
+      pm10: { concentration: 8.1, index: 1 },
+      pm25: { concentration: 4.2 },
+      o3: { index: 1 },
+    })),
+  },
+  observations: {
+    station: { ...sampleClimateStation, id: "SN50540", name: "BERGEN - FLORIDA", distanceKm: 1.2 },
+    latest: [
+      {
+        stationId: "SN50540:0",
+        referenceTime: "2026-07-23T11:00:00.000Z",
+        observations: [
+          { elementId: "air_temperature", value: 16.8, unit: "degC" },
+          { elementId: "wind_speed", value: 5.4, unit: "m/s" },
+          { elementId: "relative_humidity", value: 77, unit: "percent" },
+        ],
+      },
+    ],
+    monthlyTemperatureNormal: {
+      stationId: "SN50540",
+      elementId: "mean(air_temperature P1M)",
+      period: "1991/2020",
+      month: 7,
+      normal: 15.4,
+    },
+  },
+  warnings: [],
+  components: [
+    conditionsAvailable("places.getMunicipalityAt", "municipality", SOURCES["kartverket"]!),
+    conditionsAvailable("weather.forecast", "forecast", SOURCES["met"]!),
+    conditionsAvailable("weather.getNowcast", "nowcast", SOURCES["met"]!),
+    conditionsAvailable("weather.getWarnings", "weather-warnings", SOURCES["met"]!),
+    conditionsAvailable("hazards.getFloodWarnings", "hazards", SOURCES["nve-flood"]!),
+    conditionsAvailable("hazards.getAvalancheWarnings", "hazards", NVE_AVALANCHE),
+    conditionsAvailable("hazards.getLandslideWarnings", "hazards", NVE_LANDSLIDE),
+    conditionsAvailable("weather.getSunTimes", "sun", SOURCES["met"]!),
+    conditionsAvailable("weather.getOceanForecast", "ocean", SOURCES["met"]!),
+    conditionsAvailable("tides.getTideTable", "tides", SOURCES["kartverket-tides"]!),
+    conditionsAvailable("weather.getAirQualityForecast", "air-quality", SOURCES["met"]!),
+    conditionsAvailable("climate.searchStations", "observations", SOURCES["met-frost"]!),
+    conditionsAvailable("climate.getLatestObservations", "observations", SOURCES["met-frost"]!),
+    conditionsAvailable("climate.getClimateNormals", "climate-normals", SOURCES["met-frost"]!),
+  ],
+};
+
+/** The real providers `profiles.conditionsAtLocation()` lists in `sources` for the full profile. */
+export const sampleConditionsSources: OpenDataSource[] = [
+  SOURCES["kartverket"]!,
+  SOURCES["met"]!,
+  SOURCES["nve-flood"]!,
+  NVE_AVALANCHE,
+  NVE_LANDSLIDE,
+  SOURCES["kartverket-tides"]!,
+  SOURCES["met-frost"]!,
+];
+
+/**
+ * The same point with no configuration at all: the municipality, NVE and the
+ * tide table answer; every MET and Frost section is `not-configured`.
+ */
+export const sampleAnonymousConditionsProfile: ConditionsAtLocationProfile = {
+  location: { latitude: 60.398, longitude: 5.32 },
+  municipality: {
+    municipalityCode: "4601",
+    municipalityName: "Bergen",
+    countyCode: "46",
+    countyName: "Vestland",
+  },
+  hazards: [],
+  hazardMatches: [],
+  tides: sampleTideTable,
+  warnings: [],
+  components: [
+    conditionsAvailable("places.getMunicipalityAt", "municipality", SOURCES["kartverket"]!),
+    conditionsOmitted("weather.forecast", "forecast", SOURCES["met"]!, "not-configured"),
+    conditionsOmitted("weather.getNowcast", "nowcast", SOURCES["met"]!, "not-configured"),
+    conditionsOmitted("weather.getWarnings", "weather-warnings", SOURCES["met"]!, "not-configured"),
+    conditionsAvailable("hazards.getFloodWarnings", "hazards", SOURCES["nve-flood"]!),
+    conditionsAvailable("hazards.getAvalancheWarnings", "hazards", NVE_AVALANCHE),
+    conditionsAvailable("hazards.getLandslideWarnings", "hazards", NVE_LANDSLIDE),
+    conditionsOmitted("weather.getSunTimes", "sun", SOURCES["met"]!, "not-configured"),
+    conditionsOmitted("weather.getOceanForecast", "ocean", SOURCES["met"]!, "not-configured"),
+    conditionsAvailable("tides.getTideTable", "tides", SOURCES["kartverket-tides"]!),
+    conditionsOmitted(
+      "weather.getAirQualityForecast",
+      "air-quality",
+      SOURCES["met"]!,
+      "not-configured",
+    ),
+    conditionsOmitted(
+      "climate.searchStations",
+      "observations",
+      SOURCES["met-frost"]!,
+      "not-configured",
+    ),
+    conditionsOmitted(
+      "climate.getLatestObservations",
+      "observations",
+      SOURCES["met-frost"]!,
+      "not-configured",
+    ),
+    conditionsOmitted(
+      "climate.getClimateNormals",
+      "climate-normals",
+      SOURCES["met-frost"]!,
+      "not-configured",
+    ),
+  ],
+};
+
+/** The real providers the anonymous profile lists in `sources`. */
+export const sampleAnonymousConditionsSources: OpenDataSource[] = [
+  SOURCES["kartverket"]!,
+  SOURCES["nve-flood"]!,
+  NVE_AVALANCHE,
+  NVE_LANDSLIDE,
+  SOURCES["kartverket-tides"]!,
+];

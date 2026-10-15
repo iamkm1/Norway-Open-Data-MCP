@@ -42,6 +42,18 @@ const HAS_AIS_CREDENTIALS =
   (process.env["NORWAY_MCP_BARENTSWATCH_AIS_CLIENT_SECRET"]?.length ?? 0) > 0;
 
 /**
+ * MET Norway's point products need the caller's identity and Frost needs a
+ * client ID. Without them the tests below assert the clean configuration error
+ * instead, which makes no request at all.
+ */
+const HAS_CONTACT_EMAIL = (process.env["NORWAY_MCP_CONTACT_EMAIL"]?.trim().length ?? 0) > 0;
+const HAS_FROST_CLIENT_ID = (process.env["NORWAY_MCP_MET_FROST_CLIENT_ID"]?.trim().length ?? 0) > 0;
+
+/** A UTC calendar date `days` before now, for windows that must lie in the past. */
+const daysAgo = (days: number): string =>
+  new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+
+/**
  * A vessel in the covered area. Berthed traffic in the Trondheimsfjord is
  * stable enough for a track lookup, and a miss is tolerated rather than failing
  * the suite: an MMSI can legitimately fall out of the 14-day window.
@@ -675,6 +687,281 @@ describeLive("live providers (opt-in, low volume)", () => {
       expect(text).toContain("NORWAY_MCP_CONTACT_EMAIL");
     } else {
       expect(result.isError).toBeFalsy();
+    }
+  });
+
+  // -------------------------------------------------------------------------
+  // Weather, tides and climate (0.5.0)
+  // -------------------------------------------------------------------------
+
+  it("Kartverket's Hydrographic Service returns a credited tide table for Bergen", async () => {
+    const result = await call("get_norwegian_tides", {
+      latitude: 60.398,
+      longitude: 5.32,
+      hours: 24,
+    });
+
+    expect(result.isError).toBeFalsy();
+    const envelope = result.structuredContent as {
+      data: {
+        covered: boolean;
+        window: { from: string; to: string };
+        tideTable: {
+          referenceLevel: string;
+          unit: string;
+          location: { name: string; code: string };
+          events: { time: string; kind: string; value: number }[];
+        } | null;
+      };
+      sources: { id: string; license?: string; attribution?: string }[];
+      warnings: string[];
+    };
+    expect(envelope.data.covered).toBe(true);
+    const table = envelope.data.tideTable!;
+    // A day on the Norwegian coast always holds at least one high or low water.
+    expect(table.events.length).toBeGreaterThan(0);
+    for (const event of table.events) expect(["high", "low"]).toContain(event.kind);
+    expect(table.location.code.length).toBeGreaterThan(0);
+    expect(table.referenceLevel.length).toBeGreaterThan(0);
+    expect(envelope.sources[0]?.id).toBe("kartverket-tides");
+    expect(envelope.sources[0]?.license).toContain("CC BY 4.0");
+    expect(envelope.sources[0]?.attribution).toContain("Hydrographic Service");
+    expect(envelope.warnings.join(" ")).toContain("UTC");
+  });
+
+  it("returns live hourly water levels with each series type kept separate", async () => {
+    const result = await call("get_norwegian_tides", {
+      latitude: 60.398,
+      longitude: 5.32,
+      hours: 6,
+      includeWaterLevels: true,
+    });
+
+    expect(result.isError).toBeFalsy();
+    const envelope = result.structuredContent as {
+      data: { waterLevels: { series: { type: string; values: unknown[] }[] } | null };
+      partial: unknown;
+    };
+    if (envelope.partial === null) {
+      const types = envelope.data.waterLevels!.series.map((series) => series.type);
+      expect(types.length).toBeGreaterThan(0);
+      expect(new Set(types).size).toBe(types.length);
+    }
+  });
+
+  it("treats an inland point as not covered by the tide service, not as an error", async () => {
+    // Lillehammer, far from the sea.
+    const result = await call("get_norwegian_tides", { latitude: 61.115, longitude: 10.466 });
+
+    expect(result.isError).toBeFalsy();
+    const envelope = result.structuredContent as {
+      data: { covered: boolean; tideTable: unknown };
+    };
+    expect(envelope.data.covered).toBe(false);
+    expect(envelope.data.tideTable).toBeNull();
+  });
+
+  it("composes a live conditions profile that credits each provider that answered", async () => {
+    const result = await call("get_weather_conditions_profile", {
+      latitude: 60.398,
+      longitude: 5.32,
+      hours: 3,
+    });
+
+    expect(result.isError).toBeFalsy();
+    const envelope = result.structuredContent as {
+      data: {
+        municipality: { municipalityCode: string } | null;
+        tides: unknown;
+        forecast: unknown;
+        observations: unknown;
+        components: { operation: string }[];
+        compositeSource: { id: string };
+      };
+      sources: { id: string; license?: string }[];
+      partial: { missing: string[] } | null;
+    };
+    expect(envelope.data.municipality?.municipalityCode).toBe("4601");
+    expect(envelope.data.components).toHaveLength(14);
+    const ids = envelope.sources.map((source) => source.id);
+    expect(ids).toContain("kartverket");
+    expect(ids).not.toContain(envelope.data.compositeSource.id);
+    for (const source of envelope.sources) expect(source.license, source.id).toBeTruthy();
+
+    if (!HAS_CONTACT_EMAIL) {
+      expect(envelope.data.forecast).toBeNull();
+      expect(envelope.partial?.missing).toContain("forecast: not-configured");
+    } else {
+      expect(ids).toContain("met");
+    }
+    if (!HAS_FROST_CLIENT_ID) {
+      expect(envelope.data.observations).toBeNull();
+      expect(envelope.partial?.missing).toContain("observations: not-configured");
+    } else {
+      expect(ids).toContain("met-frost");
+    }
+  });
+
+  it("gates the three MET Norway weather tools cleanly without a contact email", async () => {
+    if (HAS_CONTACT_EMAIL) return;
+    for (const [name, args] of [
+      ["get_norwegian_weather_warnings", {}],
+      ["get_norwegian_precipitation_nowcast", { latitude: 59.91, longitude: 10.75 }],
+      ["get_norwegian_sun_times", { latitude: 59.91, longitude: 10.75 }],
+    ] as [string, Record<string, unknown>][]) {
+      const result = (await client.callTool({ name, arguments: args })) as CallToolResult;
+      expect(result.isError, name).toBe(true);
+      const text = (result.content as { type: string; text: string }[])[0]!.text;
+      expect(text, name).toContain("NORWAY_MCP_CONTACT_EMAIL");
+    }
+  });
+
+  it("MET Norway returns current warnings for Norway, or none, without failing", async () => {
+    if (!HAS_CONTACT_EMAIL) return;
+    const result = await call("get_norwegian_weather_warnings", {});
+
+    expect(result.isError).toBeFalsy();
+    const envelope = result.structuredContent as {
+      data: {
+        warnings: { messageType: string; geometry: unknown; awarenessLevel: { level: number } }[];
+      };
+      warnings: string[];
+      sources: { id: string }[];
+    };
+    for (const warning of envelope.data.warnings) {
+      expect(["Alert", "Update", "Cancel"]).toContain(warning.messageType);
+      expect([1, 2, 3, 4]).toContain(warning.awarenessLevel.level);
+      expect(warning.geometry).toBeNull();
+    }
+    expect(envelope.warnings.join(" ")).toContain("never an all-clear");
+    expect(envelope.sources[0]?.id).toBe("met");
+  });
+
+  it("MET Norway returns a radar nowcast for Oslo and none for Svalbard", async () => {
+    if (!HAS_CONTACT_EMAIL) return;
+    const oslo = await call("get_norwegian_precipitation_nowcast", {
+      latitude: 59.9139,
+      longitude: 10.7522,
+    });
+    const svalbard = await call("get_norwegian_precipitation_nowcast", {
+      latitude: 78.2232,
+      longitude: 15.6267,
+    });
+
+    expect(oslo.isError).toBeFalsy();
+    expect((oslo.structuredContent as { data: { coverage: string } }).data.coverage).toBe(
+      "covered",
+    );
+    expect(svalbard.isError).toBeFalsy();
+    expect(
+      (svalbard.structuredContent as { data: { coverage: string; nowcast: unknown } }).data,
+    ).toMatchObject({ coverage: "outside-radar-area", nowcast: null });
+  });
+
+  it("MET Norway reports polar night in Tromsø as an answer, with the Oslo offset", async () => {
+    if (!HAS_CONTACT_EMAIL) return;
+    const result = await call("get_norwegian_sun_times", {
+      latitude: 69.6492,
+      longitude: 18.9553,
+      date: "2026-12-21",
+    });
+
+    expect(result.isError).toBeFalsy();
+    const data = (
+      result.structuredContent as {
+        data: {
+          polarCondition: string | null;
+          sunrise: unknown;
+          solarNoon: { time: string } | null;
+        };
+      }
+    ).data;
+    expect(data.polarCondition).toBe("polar-night");
+    expect(data.sunrise).toBeNull();
+    expect(data.solarNoon?.time).toContain("+01:00");
+  });
+
+  it("gates the Frost history tool cleanly without a client ID", async () => {
+    if (HAS_FROST_CLIENT_ID) return;
+    const result = (await client.callTool({
+      name: "get_norwegian_weather_history",
+      arguments: { stationId: "SN18700", startDate: daysAgo(7) },
+    })) as CallToolResult;
+
+    expect(result.isError).toBe(true);
+    const text = (result.content as { type: string; text: string }[])[0]!.text;
+    expect(text).toContain("NORWAY_MCP_MET_FROST_CLIENT_ID");
+    expect(text).not.toContain('credentials["met-frost"]');
+  });
+
+  it("Frost returns every offered daily element at Blindern, confirming their IDs", async () => {
+    if (!HAS_FROST_CLIENT_ID) return;
+    const result = await call("get_norwegian_weather_history", {
+      stationId: "SN18700",
+      resolution: "daily",
+      startDate: daysAgo(10),
+      endDate: daysAgo(4),
+      includeNormals: true,
+    });
+
+    expect(result.isError).toBeFalsy();
+    const envelope = result.structuredContent as {
+      data: {
+        station: { id: string; name: string };
+        records: { observations: { elementId: string }[] }[];
+        normals: { period: string; values: unknown[] } | null;
+      };
+      sources: { id: string }[];
+    };
+    expect(envelope.data.station.id).toBe("SN18700");
+    const seen = new Set(
+      envelope.data.records.flatMap((record) =>
+        record.observations.map((value) => value.elementId),
+      ),
+    );
+    for (const id of [
+      "mean(air_temperature P1D)",
+      "min(air_temperature P1D)",
+      "max(air_temperature P1D)",
+      "sum(precipitation_amount P1D)",
+      "max(wind_speed_of_gust P1D)",
+    ]) {
+      expect(seen, `Frost returned no ${id} at Blindern`).toContain(id);
+    }
+    expect(envelope.data.normals?.period).toBe("1991/2020");
+    expect(envelope.data.normals?.values.length).toBeGreaterThan(0);
+    expect(envelope.sources[0]?.id).toBe("met-frost");
+  });
+
+  it("Frost returns every offered hourly element at the station nearest Oslo, confirming their IDs", async () => {
+    if (!HAS_FROST_CLIENT_ID) return;
+    const result = await call("get_norwegian_weather_history", {
+      latitude: 59.9139,
+      longitude: 10.7522,
+      resolution: "hourly",
+      startDate: daysAgo(3),
+    });
+
+    expect(result.isError).toBeFalsy();
+    const envelope = result.structuredContent as {
+      data: {
+        station: { distanceKm?: number };
+        records: { observations: { elementId: string }[] }[];
+      };
+    };
+    expect(envelope.data.station.distanceKm).toBeTypeOf("number");
+    const seen = new Set(
+      envelope.data.records.flatMap((record) =>
+        record.observations.map((value) => value.elementId),
+      ),
+    );
+    for (const id of [
+      "air_temperature",
+      "wind_speed",
+      "relative_humidity",
+      "sum(precipitation_amount PT1H)",
+    ]) {
+      expect(seen, `Frost returned no ${id} at the nearest station`).toContain(id);
     }
   });
 });

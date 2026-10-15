@@ -29,6 +29,9 @@ const CACHE_MAX_ENTRIES = 200;
  * `barentswatch-ais` are distinct credential scopes in the SDK — BarentsWatch
  * issues a separate registered client for AIS — so a secret configured for one
  * is never copied into the other.
+ *
+ * `met-frost` is the exception to the pair rule: Frost takes a client ID alone,
+ * as the HTTP Basic username, and the SDK sends it only to `frost.met.no`.
  */
 function buildCredentials(config: ServerConfig): ProviderCredentials {
   const credentials: ProviderCredentials = {};
@@ -50,6 +53,9 @@ function buildCredentials(config: ServerConfig): ProviderCredentials {
       clientId: config.barentswatchAisClientId,
       clientSecret: config.barentswatchAisClientSecret,
     };
+  }
+  if (config.metFrostClientId !== undefined) {
+    credentials["met-frost"] = { clientId: config.metFrostClientId };
   }
 
   return credentials;

@@ -21,9 +21,18 @@ import type {
   AquacultureSiteSearchResult,
   AutocompleteParameters,
   AutocompletePlace,
+  CelestialParameters,
+  ClimateNormal,
+  ClimateNormalParameters,
+  ClimateObservationParameters,
+  ClimateObservationRecord,
+  ClimateStation,
+  ClimateStationSearchParameters,
   CompanyProfile,
   CompanySearchParameters,
   CompanySearchResult,
+  ConditionsAtLocationParameters,
+  ConditionsAtLocationProfile,
   CurrentElectricityPriceParameters,
   Departure,
   DepartureParameters,
@@ -50,6 +59,7 @@ import type {
   LandResourcePointQuery,
   LandResourceResult,
   MarineForecastParameters,
+  MetPointParameters,
   Mmsi,
   MunicipalityProfile,
   NatureAtLocationParameters,
@@ -58,6 +68,7 @@ import type {
   NaturbaseFeatureResult,
   NaturbasePointQuery,
   NatureTypeFeature,
+  Nowcast,
   OpenDataResponse,
   ProposedProtectedAreaFeature,
   ProtectedAreaFeature,
@@ -66,10 +77,17 @@ import type {
   StatisticsQuery,
   StatisticsResult,
   StatisticsTableMetadata,
+  SunTimes,
+  TideTable,
+  TideTableParameters,
   VesselProfile,
   VesselProfileParameters,
+  WaterLevelParameters,
+  WaterLevels,
   WaveForecast,
   WeatherForecast,
+  WeatherWarningCollection,
+  WeatherWarningParameters,
 } from "norway-open-data-sdk";
 
 import type { Logger } from "../logging/logger.js";
@@ -102,6 +120,10 @@ export type NorwayOpenDataLike = {
       parameters: NatureAtLocationParameters,
       options?: RequestOptions,
     ): Promise<OpenDataResponse<NatureAtLocationProfile>>;
+    conditionsAtLocation(
+      parameters: ConditionsAtLocationParameters,
+      options?: RequestOptions,
+    ): Promise<OpenDataResponse<ConditionsAtLocationProfile>>;
   };
   addresses: {
     search(
@@ -109,11 +131,63 @@ export type NorwayOpenDataLike = {
       options?: RequestOptions,
     ): Promise<OpenDataResponse<AddressSearchResult>>;
   };
+  /**
+   * MET Norway's api.met.no products.
+   *
+   * Only the four the curated tools call. `current()` is served by `forecast()`,
+   * and `getMoonTimes`, `getOceanForecast` and `getAirQualityForecast` exist on
+   * the real client but have no tool of their own; see
+   * docs/capability-matrix.md for why.
+   */
   weather: {
     forecast(
       parameters: ForecastParameters,
       options?: RequestOptions,
     ): Promise<OpenDataResponse<WeatherForecast>>;
+    getWarnings(
+      parameters?: WeatherWarningParameters,
+      options?: RequestOptions,
+    ): Promise<OpenDataResponse<WeatherWarningCollection>>;
+    getNowcast(
+      parameters: MetPointParameters,
+      options?: RequestOptions,
+    ): Promise<OpenDataResponse<Nowcast | undefined>>;
+    getSunTimes(
+      parameters: CelestialParameters,
+      options?: RequestOptions,
+    ): Promise<OpenDataResponse<SunTimes>>;
+  };
+  /**
+   * Kartverket's Hydrographic Service. `listStations` and `getReferenceLevels`
+   * exist on the real client and are deliberately absent: no tool needs them.
+   */
+  tides: {
+    getTideTable(
+      parameters: TideTableParameters,
+      options?: RequestOptions,
+    ): Promise<OpenDataResponse<TideTable | undefined>>;
+    getWaterLevels(
+      parameters: WaterLevelParameters,
+      options?: RequestOptions,
+    ): Promise<OpenDataResponse<WaterLevels | undefined>>;
+  };
+  /**
+   * MET Norway Frost. Only the three calls the weather-history tool makes; the
+   * conditions profile reaches the others inside the SDK.
+   */
+  climate: {
+    searchStations(
+      parameters: ClimateStationSearchParameters,
+      options?: RequestOptions,
+    ): Promise<OpenDataResponse<ClimateStation[]>>;
+    getObservations(
+      parameters: ClimateObservationParameters,
+      options?: RequestOptions,
+    ): Promise<OpenDataResponse<ClimateObservationRecord[]>>;
+    getClimateNormals(
+      parameters: ClimateNormalParameters,
+      options?: RequestOptions,
+    ): Promise<OpenDataResponse<ClimateNormal[]>>;
   };
   hazards: {
     getFloodWarnings(

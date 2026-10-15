@@ -197,6 +197,8 @@ export const hazardsTool: ToolDefinition<typeof inputSchema, Data> = {
     "Do not use this when the user wants temperature, rain or wind — that is " +
     "get_norwegian_weather_forecast. For warnings tied to one specific street address, " +
     "get_norwegian_location_profile matches warnings to that address's administrative area. " +
+    "MET Norway's weather warnings — wind, gale, rain, snow, storm surge — are " +
+    "get_norwegian_weather_warnings, a different provider. " +
     "Results are never an all-clear: direct users to varsom.no for safety decisions.",
   inputSchema,
   dataSchema,

@@ -88,6 +88,8 @@ export function projectHazard(
   warning: HazardWarning,
   tracker: TruncationTracker,
   index: number,
+  /** Name of the array in the tool's payload, for the truncation report. */
+  field = "warnings",
 ): ProjectedHazard {
   return {
     type: warning.type,
@@ -97,7 +99,7 @@ export function projectHazard(
       ? {
           // Varsom descriptions are prose and occasionally very long; clamping
           // is recorded so the cut is visible in the result.
-          description: tracker.clampString(`warnings[${index}].description`, warning.description),
+          description: tracker.clampString(`${field}[${index}].description`, warning.description),
         }
       : {}),
     ...(warning.validFrom !== undefined ? { validFrom: warning.validFrom } : {}),
@@ -232,7 +234,9 @@ export function componentWarnings(components: readonly ProjectedComponent[]): st
           `The "${component.section}" section was skipped because ${component.provider} needs configuration this server does not have. ` +
             (component.provider === "met"
               ? "Set NORWAY_MCP_CONTACT_EMAIL to enable it."
-              : "See the README for the required environment variable."),
+              : component.provider === "met-frost"
+                ? "Set NORWAY_MCP_MET_FROST_CLIENT_ID to enable it."
+                : "See the README for the required environment variable."),
         );
         break;
       case "provider-error":

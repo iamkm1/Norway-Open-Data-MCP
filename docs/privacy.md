@@ -14,17 +14,19 @@ Your MCP client  →  this process (local)  →  norway-open-data-sdk  →  a No
 Nothing else is contacted. There is no intermediate service, no proxy and no
 analytics endpoint owned by this project.
 
-The public-data providers you query — Brønnøysundregistrene, Kartverket, MET
-Norway, NVE, SSB, SSB Klass, FHI, Entur, Statens vegvesen, Hva koster strømmen?,
-BarentsWatch, BarentsWatch AIS and Fiskeridirektoratet — receive a direct HTTPS
-request from your machine, exactly as if you had opened their website. They can
-see:
+The public-data providers you query — Brønnøysundregistrene, Kartverket and its
+Hydrographic Service, MET Norway and MET Norway Frost, NVE, SSB, SSB Klass, FHI,
+Entur, Statens vegvesen, Hva koster strømmen?, BarentsWatch, BarentsWatch AIS,
+Fiskeridirektoratet, Geonorge, Miljødirektoratet and NIBIO — receive a direct
+HTTPS request from your machine, exactly as if you had opened their website.
+They can see:
 
 - your IP address;
 - the caller identity you configured (`NORWAY_MCP_APP_NAME`, and
   `NORWAY_MCP_CONTACT_EMAIL` where MET Norway requires it);
-- the query itself, for example the address or organization number you asked
-  about.
+- your Frost client ID, sent to `frost.met.no` only, when you configured one;
+- the query itself, for example the address, coordinate or organization number
+  you asked about.
 
 Each provider has its own privacy policy and terms; this project cannot change
 them.
@@ -72,9 +74,12 @@ tool argument can never supply one.
 | `NORWAY_MCP_BARENTSWATCH_CLIENT_SECRET`     | OAuth2 client secret, BarentsWatch `api` scope |
 | `NORWAY_MCP_BARENTSWATCH_AIS_CLIENT_ID`     | OAuth2 client id, BarentsWatch `ais` scope     |
 | `NORWAY_MCP_BARENTSWATCH_AIS_CLIENT_SECRET` | OAuth2 client secret, BarentsWatch `ais` scope |
+| `NORWAY_MCP_MET_FROST_CLIENT_ID`            | Frost client ID, sent as HTTP Basic username   |
 
-The SSB Klass tools and both Fiskeridirektoratet registers add **no** credential
-at all: they are anonymous.
+The SSB Klass tools, both Fiskeridirektoratet registers and the tide tool add
+**no** credential at all: they are anonymous. The Frost client ID is one value
+with no secret; the SDK sends it only to `frost.met.no`, as the username of an
+HTTP Basic `Authorization` header, and never to any other host.
 
 Every one of them is:
 
@@ -97,9 +102,10 @@ the provider rejects with HTTP 401, and — per its own documentation — never
 writes them to the response cache or any persistent store. There is no hosted
 proxy. Nothing token-related is written to disk by anything in this stack.
 
-Credential-shaped patterns (`Authorization: Bearer …`, `x-api-key`, cookies) are
-stripped even when this process never held the value, which is what catches a
-token echoed back inside a provider error message. Local filesystem paths are
+Credential-shaped patterns (`Authorization: Bearer …` and `Authorization: Basic …`,
+`x-api-key`, cookies) are stripped even when this process never held the value,
+which is what catches a token — or a Basic credential carrying the Frost client
+ID — echoed back inside a provider error message. Local filesystem paths are
 removed from all output, and stack traces are never returned to a client.
 
 `--doctor` masks the configured email (`o***n@example.com`) and prints every key,
@@ -168,6 +174,22 @@ reconstructed.
   advertises, and this server never calls one — so a model cannot use these tools
   to reach an arbitrary host.
 
+## Weather and climate data
+
+- **MetAlerts carries no personal data.** A weather warning describes an area, a
+  phenomenon and a validity window. Its contact field is a generic met.no link,
+  not a person, and the resource links MET attaches are never followed.
+- **Frost station-holder names are never returned.** Frost's station records
+  name the organizations or people who hold a station. The SDK withholds those
+  names at its validation boundary, so they reach neither its data, its raw
+  payload nor its cache, and this server copies station fields one by one, so
+  nothing can bring them back from raw output or a later SDK field.
+- **Tide data carries no personal data.** Kartverket publishes heights, times
+  and the reference station they were modelled from.
+- **Coordinates and station IDs are query inputs, not location tracking**, as for
+  the geospatial tools: they reach MET Norway, Frost or Kartverket as part of a
+  request and nothing is retained.
+
 ## Verifying these claims
 
 These are testable properties, not promises:
@@ -184,6 +206,12 @@ These are testable properties, not promises:
   connection outlives a tool call.
 - `tests/unit/geospatial-tools.test.ts` asserts that a named individual and
   e-mail address in a Geonorge record appear nowhere in the serialized result.
+- `tests/unit/tides-climate-tools.test.ts` and
+  `tests/unit/conditions-profile.test.ts` assert that a station-holder field
+  added to a Frost station never reaches a result, and
+  `tests/unit/limits-config-envelope.test.ts` and
+  `tests/unit/server-contract.test.ts` assert that the Frost client ID is
+  redacted by value and masked by `--doctor`.
 - `tests/unit/server-contract.test.ts` asserts that **no tool** advertises an
   input property named like a URL, host, endpoint, service, WFS/WMS/OGC/ArcGIS
   reference, type name or layer name — the structural guarantee that this server

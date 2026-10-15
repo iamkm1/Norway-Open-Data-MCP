@@ -15,7 +15,11 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 
-import { EXPECTED_TOOL_COUNT } from "../../src/tools/registry.js";
+import {
+  EXPECTED_TOOL_COUNT,
+  PRE_WEATHER_TOOL_ORDER,
+  WEATHER_TOOL_NAMES,
+} from "../../src/tools/registry.js";
 import { PACKAGE_NAME, PACKAGE_VERSION } from "../../src/version.js";
 
 const CLI = fileURLToPath(new URL("../../dist/cli.js", import.meta.url));
@@ -34,7 +38,14 @@ describe("MCP client over a spawned subprocess", () => {
     transport = new StdioClientTransport({
       command: process.execPath,
       args: [CLI],
-      env: { ...process.env, NORWAY_MCP_DEBUG: "1" },
+      // The MET identity and the Frost ID are blanked, so the configuration-error
+      // cases hold whatever the developer's own shell has set.
+      env: {
+        ...process.env,
+        NORWAY_MCP_DEBUG: "1",
+        NORWAY_MCP_CONTACT_EMAIL: "",
+        NORWAY_MCP_MET_FROST_CLIENT_ID: "",
+      },
       stderr: "pipe",
     });
     client = new Client({ name: "integration-test", version: "1.0.0" });
@@ -281,6 +292,66 @@ describe("MCP client over a spawned subprocess", () => {
     expect(result).toHaveProperty("content");
     const { tools } = await client.listTools();
     expect(tools).toHaveLength(EXPECTED_TOOL_COUNT);
+  });
+
+  it("keeps the twenty-eight earlier tools first and appends the six weather tools", async () => {
+    const { tools } = await client.listTools();
+    const names = tools.map((tool) => tool.name);
+
+    expect(names.slice(0, PRE_WEATHER_TOOL_ORDER.length)).toEqual([...PRE_WEATHER_TOOL_ORDER]);
+    expect(names.slice(PRE_WEATHER_TOOL_ORDER.length)).toEqual([...WEATHER_TOOL_NAMES]);
+
+    const byName = new Map(tools.map((tool) => [tool.name, tool]));
+    for (const name of WEATHER_TOOL_NAMES) {
+      const tool = byName.get(name)!;
+      expect(tool.inputSchema.additionalProperties, name).toBe(false);
+      expect(tool.outputSchema, name).toBeDefined();
+      expect(tool.annotations?.readOnlyHint, name).toBe(true);
+    }
+  });
+
+  it("names the exact variable each gated weather tool needs, without contacting a provider", async () => {
+    for (const [name, args, variable] of [
+      ["get_norwegian_weather_warnings", {}, "NORWAY_MCP_CONTACT_EMAIL"],
+      [
+        "get_norwegian_precipitation_nowcast",
+        { latitude: 59.91, longitude: 10.75 },
+        "NORWAY_MCP_CONTACT_EMAIL",
+      ],
+      [
+        "get_norwegian_sun_times",
+        { latitude: 69.65, longitude: 18.96 },
+        "NORWAY_MCP_CONTACT_EMAIL",
+      ],
+      [
+        "get_norwegian_weather_history",
+        { stationId: "SN18700", startDate: "2026-01-01" },
+        "NORWAY_MCP_MET_FROST_CLIENT_ID",
+      ],
+    ] as [string, Record<string, unknown>, string][]) {
+      const result = await client.callTool({ name, arguments: args });
+      expect(result.isError, name).toBe(true);
+      const text = (result.content as { type: string; text: string }[])[0]!.text;
+      expect(text, name).toContain(variable);
+      expect(text, name).not.toContain('credentials["met-frost"]');
+    }
+  });
+
+  it("refuses malformed weather, tide and history requests before any provider is reached", async () => {
+    for (const [name, args] of [
+      ["get_norwegian_tides", { latitude: 60.398, longitude: 5.32, hours: 500 }],
+      ["get_norwegian_tides", { latitude: 60.398, longitude: 5.32, referenceLevel: "lat" }],
+      ["get_weather_conditions_profile", { latitude: 60.398, longitude: 5.32, hours: 49 }],
+      ["get_weather_conditions_profile", { latitude: 95, longitude: 5.32 }],
+      ["get_norwegian_weather_warnings", { latitude: 60.39, longitude: 5.32, countyCode: "46" }],
+      [
+        "get_norwegian_weather_history",
+        { stationId: "SN18700", startDate: "2026-01-01", endDate: "2026-06-01" },
+      ],
+    ] as [string, Record<string, unknown>][]) {
+      const result = await client.callTool({ name, arguments: args });
+      expect(result.isError, `${name} ${JSON.stringify(args)}`).toBe(true);
+    }
   });
 
   it("keeps serving requests after an error", async () => {

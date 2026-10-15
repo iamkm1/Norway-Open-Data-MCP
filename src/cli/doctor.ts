@@ -94,8 +94,20 @@ export function buildDoctorReport(env: NodeJS.ProcessEnv = process.env): DoctorR
   if (config.contactEmail === undefined) {
     lines.push(
       `Note: ${ENV_VARS.contactEmail} is not set. MET Norway requires callers to identify`,
-      "themselves, so get_norwegian_weather_forecast will return a configuration error and the",
-      "weather section of get_norwegian_location_profile will be omitted. Every other tool works.",
+      "themselves, so get_norwegian_weather_forecast, get_norwegian_weather_warnings,",
+      "get_norwegian_precipitation_nowcast and get_norwegian_sun_times will return a",
+      "configuration error, the weather section of get_norwegian_location_profile will be",
+      "omitted, and get_weather_conditions_profile will omit its MET Norway sections (forecast,",
+      "nowcast, weather warnings, sun, ocean and air quality). Every other tool works.",
+      "",
+    );
+  }
+
+  if (config.metFrostClientId === undefined) {
+    lines.push(
+      `Note: ${ENV_VARS.metFrostClientId} is not set. MET Norway Frost needs a free client ID,`,
+      "so get_norwegian_weather_history will return a configuration error and",
+      "get_weather_conditions_profile will omit its observations section. Every other tool works.",
       "",
     );
   }

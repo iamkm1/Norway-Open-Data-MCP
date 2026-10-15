@@ -38,6 +38,12 @@ import { natureTypesAtTool } from "./nature-types-at.js";
 import { interventionFreeNatureAtTool } from "./intervention-free-nature-at.js";
 import { landResourcesAtTool } from "./land-resources-at.js";
 import { natureProfileTool } from "./nature-profile.js";
+import { weatherWarningsTool } from "./weather-warnings.js";
+import { precipitationNowcastTool } from "./precipitation-nowcast.js";
+import { sunTimesTool } from "./sun-times.js";
+import { tidesTool } from "./tides.js";
+import { weatherHistoryTool } from "./weather-history.js";
+import { weatherConditionsProfileTool } from "./weather-conditions-profile.js";
 import type { AnyToolDefinition } from "./types.js";
 
 export const allTools: readonly AnyToolDefinition[] = [
@@ -74,10 +80,19 @@ export const allTools: readonly AnyToolDefinition[] = [
   interventionFreeNatureAtTool,
   landResourcesAtTool,
   natureProfileTool,
+  // Weather, tides and climate. Appended for the same reason again: the
+  // twenty-eight tools every existing client already sees keep their names and
+  // their positions in `tools/list`.
+  weatherWarningsTool,
+  precipitationNowcastTool,
+  sunTimesTool,
+  tidesTool,
+  weatherHistoryTool,
+  weatherConditionsProfileTool,
 ];
 
 /** Guards the documented contract that this server exposes exactly this many tools. */
-export const EXPECTED_TOOL_COUNT = 28;
+export const EXPECTED_TOOL_COUNT = 34;
 
 /**
  * The tools that shipped before the geospatial release, in their exact order.
@@ -106,4 +121,31 @@ export const PRE_GEOSPATIAL_TOOL_ORDER: readonly string[] = [
   "search_aquaculture_locations",
   "get_aquaculture_location",
   "get_marine_forecast",
+];
+
+/**
+ * The tools that shipped before the weather release, in their exact order: the
+ * twenty above plus the eight geospatial tools. The six weather, tide and
+ * climate tools follow them. See tests/unit/server-contract.test.ts.
+ */
+export const PRE_WEATHER_TOOL_ORDER: readonly string[] = [
+  ...PRE_GEOSPATIAL_TOOL_ORDER,
+  "search_geonorge_datasets",
+  "get_geonorge_metadata",
+  "get_protected_areas_at",
+  "search_protected_areas",
+  "get_nature_types_at",
+  "get_intervention_free_nature_at",
+  "get_land_resources_at",
+  "get_nature_profile",
+];
+
+/** The six tools added in 0.5.0, in their registered order. */
+export const WEATHER_TOOL_NAMES: readonly string[] = [
+  "get_norwegian_weather_warnings",
+  "get_norwegian_precipitation_nowcast",
+  "get_norwegian_sun_times",
+  "get_norwegian_tides",
+  "get_norwegian_weather_history",
+  "get_weather_conditions_profile",
 ];

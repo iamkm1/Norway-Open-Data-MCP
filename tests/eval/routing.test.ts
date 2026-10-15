@@ -126,6 +126,15 @@ describe("routing evaluation corpus", () => {
       ["get_nature_profile", "get_protected_areas_at"],
       ["get_nature_profile", "get_land_resources_at"],
       ["search_geonorge_datasets", "get_current_norwegian_hazards"],
+      // Weather, tides and climate (0.5.0).
+      ["get_norwegian_weather_warnings", "get_current_norwegian_hazards"],
+      ["get_norwegian_weather_warnings", "get_norwegian_weather_forecast"],
+      ["get_norwegian_precipitation_nowcast", "get_norwegian_weather_forecast"],
+      ["get_norwegian_weather_history", "get_norwegian_weather_forecast"],
+      ["get_norwegian_tides", "get_marine_forecast"],
+      ["get_weather_conditions_profile", "get_norwegian_location_profile"],
+      ["get_weather_conditions_profile", "get_norwegian_weather_forecast"],
+      ["get_norwegian_weather_history", "get_weather_conditions_profile"],
     ];
 
     for (const [a, b] of pairs) {
@@ -146,6 +155,35 @@ describe("routing evaluation corpus", () => {
     );
     for (const name of toolNames) {
       expect(exercised, `${name} has no positive routing case`).toContain(name);
+    }
+  });
+
+  it("asks both ways, in both languages, for each weather ambiguity pair", () => {
+    // These pairs are the main routing risk of the weather release: MET's
+    // rainFlood and stormSurge sound like NVE's warnings, and forecast,
+    // nowcast, history and the conditions profile all answer "weather".
+    const pairs: [string, string][] = [
+      ["get_norwegian_weather_warnings", "get_current_norwegian_hazards"],
+      ["get_norwegian_weather_warnings", "get_norwegian_weather_forecast"],
+      ["get_norwegian_precipitation_nowcast", "get_norwegian_weather_forecast"],
+      ["get_norwegian_weather_history", "get_norwegian_weather_forecast"],
+      ["get_norwegian_tides", "get_marine_forecast"],
+      ["get_weather_conditions_profile", "get_norwegian_location_profile"],
+      ["get_weather_conditions_profile", "get_norwegian_weather_forecast"],
+      ["get_norwegian_weather_history", "get_weather_conditions_profile"],
+    ];
+
+    for (const [a, b] of pairs) {
+      const languages = new Set(
+        corpus.cases
+          .filter(
+            (entry) =>
+              (entry.expectedTool === a && entry.mustNotSelect.includes(b)) ||
+              (entry.expectedTool === b && entry.mustNotSelect.includes(a)),
+          )
+          .map((entry) => entry.language),
+      );
+      expect([...languages].sort(), `${a} vs ${b}`).toEqual(["en", "no"]);
     }
   });
 

@@ -57,7 +57,7 @@ separate packages and separate repositories.
 | -------------------------------------- | -------------------------- | ----------------------------------- |
 | What it is                             | A TypeScript library       | An MCP server                       |
 | Used by                                | Your own code              | AI assistants, via MCP              |
-| Surface                                | 21 namespaces, 80+ methods | 28 curated tools                    |
+| Surface                                | 24 namespaces, 135 methods | 34 curated tools                    |
 | Network, retries, caching, rate limits | Owned by the SDK           | Delegated to the SDK                |
 
 The SDK's retry, cache and rate-limit behaviour is used as-is and deliberately
@@ -208,23 +208,26 @@ Configuration**). VS Code uses `servers`, not `mcpServers`:
 
 ## Environment variables
 
-Everything is optional. **Twenty-three of the twenty-eight tools work with no
-configuration at all**, including both Fiskeridirektoratet registers and all
-eight geospatial tools. The five that need something are
-`get_norwegian_weather_forecast` (a contact email for MET Norway),
-`get_marine_forecast`, and the three BarentsWatch AIS tools. The geospatial
-release added **no new environment variable**: Geonorge, Naturbase and NIBIO are
-all anonymous.
+Everything is optional. **Twenty-five of the thirty-four tools work with no
+configuration at all**, including both Fiskeridirektoratet registers, all eight
+geospatial tools, the tide tool and the conditions profile. The nine that need
+something are the four MET Norway point tools (`get_norwegian_weather_forecast`,
+`get_norwegian_weather_warnings`, `get_norwegian_precipitation_nowcast` and
+`get_norwegian_sun_times`, which need a contact email), the Frost history tool
+`get_norwegian_weather_history` (a free Frost client ID), `get_marine_forecast`,
+and the three BarentsWatch AIS tools. `get_weather_conditions_profile` works
+without either value; the contact email adds its MET Norway sections and the
+Frost ID adds its observations.
 
-| Variable                   | Default                      | What it does                                                                                                                                                                    |
-| -------------------------- | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `NORWAY_MCP_CONTACT_EMAIL` | _(unset)_                    | **Required by MET Norway.** Enables `get_norwegian_weather_forecast` and the weather section of `get_norwegian_location_profile`. MET requires every caller to be identifiable. |
-| `NORWAY_MCP_APP_NAME`      | `norway-open-data-mcp/0.4.0` | Caller identity sent to Entur (`ET-Client-Name`) and Statens vegvesen (`X-Client`), and part of MET's User-Agent.                                                               |
-| `NORWAY_MCP_NVE_API_KEY`   | _(unset)_                    | Free NVE HydAPI key. **No current tool needs it**; accepted for forward compatibility.                                                                                          |
-| `NORWAY_MCP_TIMEOUT_MS`    | `10000`                      | Request timeout, 1000–60000.                                                                                                                                                    |
-| `NORWAY_MCP_RETRIES`       | `2`                          | Retry attempts after the first, 0–5.                                                                                                                                            |
-| `NORWAY_MCP_CACHE`         | `1`                          | In-process response cache. Never written to disk.                                                                                                                               |
-| `NORWAY_MCP_DEBUG`         | `0`                          | Verbose diagnostics on **stderr only**, with credentials redacted.                                                                                                              |
+| Variable                   | Default                      | What it does                                                                                                                                                                                                                                                                                                                                 |
+| -------------------------- | ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `NORWAY_MCP_CONTACT_EMAIL` | _(unset)_                    | **Required by MET Norway.** Enables `get_norwegian_weather_forecast`, `get_norwegian_weather_warnings`, `get_norwegian_precipitation_nowcast` and `get_norwegian_sun_times`, the weather section of `get_norwegian_location_profile` and the MET sections of `get_weather_conditions_profile`. MET requires every caller to be identifiable. |
+| `NORWAY_MCP_APP_NAME`      | `norway-open-data-mcp/0.5.0` | Caller identity sent to Entur (`ET-Client-Name`) and Statens vegvesen (`X-Client`), and part of MET's User-Agent.                                                                                                                                                                                                                            |
+| `NORWAY_MCP_NVE_API_KEY`   | _(unset)_                    | Free NVE HydAPI key. **No current tool needs it**; accepted for forward compatibility.                                                                                                                                                                                                                                                       |
+| `NORWAY_MCP_TIMEOUT_MS`    | `10000`                      | Request timeout, 1000–60000.                                                                                                                                                                                                                                                                                                                 |
+| `NORWAY_MCP_RETRIES`       | `2`                          | Retry attempts after the first, 0–5.                                                                                                                                                                                                                                                                                                         |
+| `NORWAY_MCP_CACHE`         | `1`                          | In-process response cache. Never written to disk.                                                                                                                                                                                                                                                                                            |
+| `NORWAY_MCP_DEBUG`         | `0`                          | Verbose diagnostics on **stderr only**, with credentials redacted.                                                                                                                                                                                                                                                                           |
 
 ### BarentsWatch credentials (maritime tools)
 
@@ -261,6 +264,27 @@ error naming exactly the variables to set. **Tool discovery is unaffected and
 every other tool keeps working**, including the two Fiskeridirektoratet
 registers, which are served anonymously.
 
+### MET Norway Frost client ID (weather history)
+
+| Variable                         | Enables                                                                                 |
+| -------------------------------- | --------------------------------------------------------------------------------------- |
+| `NORWAY_MCP_MET_FROST_CLIENT_ID` | `get_norwegian_weather_history`, and the observations section of the conditions profile |
+
+Frost, MET Norway's archive of observations and climate statistics, needs a free
+client ID from [Frost's registration page](https://frost.met.no/auth/requestCredentials.html).
+It is **one value, not a pair**: Frost takes the ID as the HTTP Basic username and
+uses no secret, so there is nothing to pair it with. The SDK sends it only to
+`frost.met.no`. A value that is not printable ASCII, or that contains a space or
+a colon, is dropped and reported by `--doctor` rather than sent.
+
+```powershell
+$env:NORWAY_MCP_MET_FROST_CLIENT_ID="your-frost-client-id"
+```
+
+Without it, `get_norwegian_weather_history` returns a configuration error naming
+the variable and the conditions profile omits its observations; every other tool
+keeps working.
+
 Set the contact email with a placeholder of your own, for example:
 
 ```powershell
@@ -269,21 +293,22 @@ $env:NORWAY_MCP_CONTACT_EMAIL="you@example.com"
 
 **No contact email is defaulted.** A fake address would be sent to MET Norway as
 your identity, which is exactly what their terms exist to prevent. Do not insert
-a fake email. Without it, the weather tool returns a clear configuration error
-naming the variable, tool discovery is unaffected, and every other tool keeps
-working.
+a fake email. Without it, the four MET Norway point tools return a clear
+configuration error naming the variable, tool discovery is unaffected, and every
+other tool keeps working.
 
 An invalid value never crashes the server: it falls back to the documented
 default and is reported by `--doctor`.
 
-**Secrets never leave this process.** Client ids, client secrets and OAuth2
-tokens are redacted from every tool result, every error message and every stderr
-diagnostic, matched both as literal configured values and as credential-shaped
-patterns. `--doctor` prints `(set, masked)` and never the value.
+**Secrets never leave this process.** Client ids, client secrets, the Frost
+client ID and OAuth2 tokens are redacted from every tool result, every error
+message and every stderr diagnostic, matched both as literal configured values
+and as credential-shaped patterns. `--doctor` prints `(set, masked)` and never
+the value.
 
 ## Tool catalogue
 
-Twenty-eight curated read-only tools, grouped below by purpose. Tool **names** are
+Thirty-four curated read-only tools, grouped below by purpose. Tool **names** are
 stable, language-neutral identifiers and are never translated. Full contracts —
 input schemas, hard limits, warnings and error behaviour — are in
 [docs/tool-catalogue.md](docs/tool-catalogue.md).
@@ -309,6 +334,42 @@ input schemas, hard limits, warnings and error behaviour — are in
 | -------------------------------- | ------------------------------------------------ | ------------ | ------------------ | ----------------- |
 | `get_norwegian_weather_forecast` | Hourly forecast for a coordinate                 | MET Norway   | **email required** | 24 / 96 hours     |
 | `get_current_norwegian_hazards`  | Official flood, avalanche and landslide warnings | NVE (Varsom) | —                  | 25 / 100 warnings |
+
+MET Norway's own weather warnings, the nowcast, sun times, tides, weather
+history and the combined conditions profile are in
+[Weather, tides and climate](#weather-tides-and-climate).
+
+### Weather, tides and climate
+
+| Tool                                  | Purpose                                                   | Source                                        | Config                             | Default / max                           |
+| ------------------------------------- | --------------------------------------------------------- | --------------------------------------------- | ---------------------------------- | --------------------------------------- |
+| `get_norwegian_weather_warnings`      | MET Norway weather warnings for a point, county or Norway | MET Norway (MetAlerts)                        | **email required**                 | all, up to 50 warnings                  |
+| `get_norwegian_precipitation_nowcast` | Radar precipitation for the next ~2 hours, 5-minute steps | MET Norway                                    | **email required**                 | 1 point, ~25 steps                      |
+| `get_norwegian_sun_times`             | Sunrise, sunset, midnight sun and polar night for a date  | MET Norway                                    | **email required**                 | 1 point, 1 date                         |
+| `get_norwegian_tides`                 | High and low tides, optionally hourly water levels        | Kartverket Hydrographic Service               | —                                  | 48 / 168 hours; water levels ≤ 48 hours |
+| `get_norwegian_weather_history`       | Past observations at a Frost station, optional normals    | MET Norway Frost                              | **Frost client ID**                | hourly ≤ 4 days, daily ≤ 100 days       |
+| `get_weather_conditions_profile`      | One coordinate's weather, sea and daylight picture        | MET Norway + NVE + Kartverket + tides + Frost | — _(email, Frost ID add sections)_ | 12 / 48 hours                           |
+
+**MET Norway warns about weather; NVE warns about floods, landslides and
+avalanches.** MetAlerts' `rainFlood` and `stormSurge` warnings sound like NVE
+products and are not, so the two warning tools point at each other, and an empty
+warning list from either is never an all-clear. A cancellation is shown as one
+(`messageType: "Cancel"`), never as an active warning, and warning areas are off
+by default and returned whole or not at all.
+
+**An answer that does not exist is not an error.** A point outside the Nordic
+radar area (which excludes Svalbard) gets a `null` nowcast with the reason, an
+inland or far-offshore point gets `covered: false` from the tide tool, and a day
+with no sunrise reports `polarCondition` (`midnight-sun` or `polar-night`).
+Tide times are UTC; every tide result names the reference level and the station,
+factor and delay its values were modelled from, and credits the Hydrographic
+Service.
+
+**Weather history and the conditions profile are experimental**, as the SDK
+marks them. History values are exactly as Frost published them — a gap is never
+filled or interpolated — and normals are labelled with their period (1991–2020).
+The profile lets the SDK compose its fourteen operations and reports each
+omitted section with its reason.
 
 ### Electricity and transport
 
@@ -457,23 +518,26 @@ identifier; the metadata tool rejects anything containing `://` or a path
 separator. The catalogue tools still let a model _discover_ any published
 Norwegian service and tell the user where it is — they just do not fetch it.
 
-### Why twenty-eight tools and not one per SDK method
+### Why thirty-four tools and not one per SDK method
 
-The SDK exposes 80+ public methods across 21 namespaces — including 14 in its
-`klass` namespace alone, 9 in `ais`, and 15 across `geodata`, `environment` and
-`land`. Tool descriptions are routing instructions for a model, and a model given
-dozens of overlapping options routes worse than one given a curated set. So only
-two Klass tools are exposed, not fourteen, three AIS tools, not nine, and six
-nature tools, not fifteen. Every method that was considered and
-deferred is recorded, with the reason, in
-[docs/capability-matrix.md](docs/capability-matrix.md).
+The SDK exposes 135 public methods across 24 namespaces — including 14 in its
+`klass` namespace alone, 10 in `ais`, 15 across `geodata`, `environment` and
+`land`, and 17 added in 0.9.0 across `weather`, `tides`, `climate`, `places` and
+`profiles`. Tool descriptions are routing instructions for a model, and a model
+given dozens of overlapping options routes worse than one given a curated set. So
+only two Klass tools are exposed, not fourteen, three AIS tools, not ten, six
+nature tools, not fifteen, and six weather, tide and climate tools, not
+seventeen. Every method that was considered and deferred is recorded, with the
+reason, in [docs/capability-matrix.md](docs/capability-matrix.md).
 
 Several tools are **compositions** rather than method wrappers: departures
 resolves a stop name before fetching the board, hazards merges three warning
 feeds, the statistics tool serves both table discovery and data through one
 schema, the marine forecast merges two independent models with per-section
-failure handling, and the vessel and nature profiles are the SDK's own
-cross-provider compositions surfaced whole. The classification-code search likewise routes an
+failure handling, and the vessel, nature and conditions profiles are the SDK's own
+cross-provider compositions surfaced whole. The tide tool optionally adds water
+levels to the tide table, and the weather-history tool finds the station before
+reading it. The classification-code search likewise routes an
 exact code to a precise lookup and a pattern to a code search behind one
 contract.
 
@@ -505,6 +569,14 @@ things you could ask:
 - Give me everything about the nature at this coordinate at once.
 - Which Norwegian datasets describe protected areas, who publishes them, and
   under what licence may I reuse them?
+- Is there a yellow wind warning for Vestland today? _("Er det farevarsel for
+  vind i Vestland?")_
+- Will it start raining in the next half hour here?
+- When is high tide in Bergen harbour tomorrow? _("Når er det flo i Bergen?")_
+- Does the sun rise at all in Tromsø on 21 December?
+- How cold did it get at Blindern in the first week of January?
+- What are conditions like right now at this coordinate — weather, sea, tide and
+  daylight?
 
 The server only reads and returns public data. It never performs actions, writes
 data, or makes changes on your behalf. And an empty hazard response is **not** an
@@ -542,25 +614,33 @@ and in prose.
 Data comes from independently operated Norwegian public APIs, each with its own
 terms:
 
-| Provider                                             | Licence (as declared by the provider)         |
-| ---------------------------------------------------- | --------------------------------------------- |
-| Brønnøysundregistrene                                | NLOD 2.0                                      |
-| Kartverket                                           | Dataset-specific Geonorge terms               |
-| Statistisk sentralbyrå (SSB)                         | CC BY 4.0                                     |
-| Statistisk sentralbyrå (SSB) Klass                   | CC BY 4.0                                     |
-| Folkehelseinstituttet (FHI)                          | Per statistics bank                           |
-| MET Norway                                           | NLOD 2.0 / CC BY 4.0 unless stated otherwise  |
-| Norges vassdrags- og energidirektorat (NVE / Varsom) | NLOD 2.0                                      |
-| Entur                                                | NLOD                                          |
-| Statens vegvesen                                     | NLOD 2.0                                      |
-| Hva koster strømmen?                                 | Open and free; no standardised licence stated |
-| BarentsWatch                                         | NLOD                                          |
-| BarentsWatch AIS (data from Kystverket)              | NLOD                                          |
-| Fiskeridirektoratet                                  | Fiskeridirektoratet data licence, NLOD terms  |
-| Geonorge / Kartverket (catalogue)                    | CC BY 4.0 for Kartverket open products        |
-| Miljødirektoratet / Naturbase                        | NLOD                                          |
-| Miljødirektoratet — inngrepsfri natur 01.2023        | NLOD 1.0, with its own required wording       |
-| NIBIO (AR50)                                         | NLOD 1.0, "Kilde: NIBIO."                     |
+| Provider                                             | Licence (as declared by the provider)           |
+| ---------------------------------------------------- | ----------------------------------------------- |
+| Brønnøysundregistrene                                | NLOD 2.0                                        |
+| Kartverket                                           | Dataset-specific Geonorge terms                 |
+| Statistisk sentralbyrå (SSB)                         | CC BY 4.0                                       |
+| Statistisk sentralbyrå (SSB) Klass                   | CC BY 4.0                                       |
+| Folkehelseinstituttet (FHI)                          | Per statistics bank                             |
+| MET Norway                                           | NLOD 2.0 / CC BY 4.0 unless stated otherwise    |
+| Norges vassdrags- og energidirektorat (NVE / Varsom) | NLOD 2.0                                        |
+| Entur                                                | NLOD                                            |
+| Statens vegvesen                                     | NLOD 2.0                                        |
+| Hva koster strømmen?                                 | Open and free; no standardised licence stated   |
+| BarentsWatch                                         | NLOD                                            |
+| BarentsWatch AIS (data from Kystverket)              | NLOD                                            |
+| Fiskeridirektoratet                                  | Fiskeridirektoratet data licence, NLOD terms    |
+| Geonorge / Kartverket (catalogue)                    | CC BY 4.0 for Kartverket open products          |
+| Miljødirektoratet / Naturbase                        | NLOD                                            |
+| Miljødirektoratet — inngrepsfri natur 01.2023        | NLOD 1.0, with its own required wording         |
+| NIBIO (AR50)                                         | NLOD 1.0, "Kilde: NIBIO."                       |
+| Kartverket Hydrographic Service (tides)              | CC BY 4.0; the Hydrographic Service is credited |
+| MET Norway Frost (observations)                      | CC BY 3.0 NO, as declared in Frost responses    |
+
+**The Hydrographic Service must be credited**, as its CC BY 4.0 licence requires;
+the SDK puts that credit in every tide result's source, and this server carries it
+in both the structured envelope and the rendered text. The conditions profile
+credits each provider that answered separately — MET Norway and MET Norway Frost
+are two entries, and NVE's three warning feeds keep their own required wording.
 
 **AIS data is supplied by the Norwegian Coastal Administration (Kystverket)
 through BarentsWatch, and both must be credited.** That attribution is carried
@@ -604,6 +684,9 @@ strømmen?. The MIT licence covers this source code only, never the data. See
 - **Geonorge contact people are not relayed.** The catalogue publishes named
   individuals and their e-mail addresses; results carry only the responsible
   organization and its role.
+- **Weather, tide and climate data carry no personal data.** Frost's
+  station-holder names are withheld by the SDK and never added back here, and
+  station records are copied field by field.
 - The server cannot read files, write files, execute commands or fetch
   caller-supplied URLs. All network access goes through the SDK.
 
@@ -621,7 +704,9 @@ The three geospatial providers publish no numeric budget of their own, so the
 SDK applies courtesy limits — 30 requests/minute for Geonorge and Naturbase, 20
 for NIBIO — and every spatial call is a bounded page rather than a walk. This
 server additionally caps provider requests per tool call, so one tool call can
-never become a crawl.
+never become a crawl. The Hydrographic Service and Frost likewise get 30
+requests/minute courtesy budgets; the tide tool makes at most two requests and
+the history tool at most three, one after the other.
 
 Budgets bound this process's own traffic only — a provider may still return HTTP
 429 if you share an IP. When that happens the tool returns a `rate_limited`
@@ -646,7 +731,8 @@ secrets masked, whether the SDK constructs, and which tools are ready or gated.
 | ------------------------------------------------------- | --------------------------------------------------------------------------- |
 | Server does not appear in the client                    | Config file syntax error, or the client was not fully restarted.            |
 | `ENOENT` / `npx` not found                              | `npx` is not on the `PATH` the client sees. Use an absolute path.           |
-| Weather tool returns a configuration error              | `NORWAY_MCP_CONTACT_EMAIL` is unset or malformed. This is by design.        |
+| A MET Norway tool returns a configuration error         | `NORWAY_MCP_CONTACT_EMAIL` is unset or malformed. This is by design.        |
+| Weather history returns a configuration error           | `NORWAY_MCP_MET_FROST_CLIENT_ID` is unset or malformed.                     |
 | `--doctor` reports Node too old                         | The client is launching a different Node than your terminal.                |
 | Every tool fails with `rate_limited`                    | Another client shares your IP, or the same provider is being hit in a loop. |
 | Tool returns `not_found` for today's electricity prices | Next-day prices publish in the early afternoon.                             |
@@ -742,6 +828,28 @@ that admits its edges:
 - **Hazard results are never an all-clear.** They are a discovery summary. An
   empty list does not mean an area is safe. Use
   [varsom.no](https://varsom.no) for all safety decisions.
+- **MET Norway weather warnings are never an all-clear either**, and they are
+  not NVE's: MetAlerts covers wind, gale, rain, snow, ice, icing, storm surge,
+  forest-fire danger, lightning and polar lows, while flood, landslide and
+  avalanche warnings are NVE's. Check [yr.no](https://www.yr.no) and
+  [varsom.no](https://varsom.no) before any safety decision. A nationwide answer
+  is capped at 50 warnings in MetAlerts' order, with the cut reported.
+- **The nowcast covers about two hours** and only inside the Nordic radar area,
+  which excludes Svalbard; its precipitation is unreliable unless MET reports the
+  radar as `ok`.
+- **Tide values are modelled away from a permanent gauge**, from a reference
+  station scaled by a factor and shifted by a delay, and every result names them.
+  Heights are relative to the reference level asked for — chart datum by default,
+  which is not mean sea level — and all tide times are UTC. Water levels cover at
+  most the first 48 hours.
+- **Weather history and the conditions profile are experimental.** The SDK
+  marks its Frost integration and the profile experimental: their schemas follow
+  Frost's published models and had not been verified against the live service
+  when SDK 0.9.0 shipped. History windows are whole UTC days, at most 4 hourly
+  or 100 daily, from a fixed list of elements; observations are never filled or
+  interpolated, and "no observations" means no data for that station and window.
+  Air quality appears only inside the profile, as MET's model forecast (product
+  version 0.1), never as a measurement.
 - **Not exposed as tools:** journey planning, open-dataset catalogue search
   (Data.norge), exchange rates and policy rates (Norges Bank), FHI health tables
   beyond the municipality profile, NVDB road querying, parliamentary data
@@ -753,8 +861,12 @@ that admits its edges:
   plus the marine wave _series_ endpoint, the auto-paginating fisheries
   iterators, Geonorge service search and its catalogue iterators, and the
   Naturbase/NIBIO bounding-box and lazy-iterator variants beyond the two curated
-  spatial searches. All are supported by the SDK; they were cut to keep the tool
-  set routable. See [docs/capability-matrix.md](docs/capability-matrix.md).
+  spatial searches, MET Norway's ocean forecast, air-quality forecast and moon
+  times as tools of their own, the tide reference levels and station list, Frost
+  station search, time-series discovery and latest observations as separate
+  tools, and the municipality-at-a-point lookup on its own. All are supported by
+  the SDK; they were cut to keep the tool set routable. See
+  [docs/capability-matrix.md](docs/capability-matrix.md).
 - **AIS absence is never absence at sea.** BarentsWatch covers the Norwegian
   economic zone plus the Svalbard and Jan Mayen protection zones, excludes
   fishing vessels under 15 m and leisure or sailing vessels under 45 m, and
@@ -852,8 +964,8 @@ that admits its edges:
   structurally unstable.
 - **Electricity prices come from a third party**, not an official government
   endpoint, and exclude grid rent, taxes and surcharges.
-- **Weather needs a contact email.** There is no way around this that respects
-  MET Norway's terms.
+- **MET Norway's tools need a contact email, and Frost needs a client ID.**
+  There is no way around either that respects the providers' terms.
 - **Location-profile roads** are first-page bounding-box candidates, not a
   distance-ranked radius query.
 - **Statistics value codes must be discovered**, never guessed — hence the
@@ -879,14 +991,14 @@ version is `0`:
 - **Patch** — fixes, validation corrections, documentation.
 - **Minor** — new tools, new optional inputs, new envelope fields. **A breaking
   change is also released as a minor version while the major is 0**, so pin
-  exactly (`norway-open-data-mcp@0.4.0`) if you depend on tool shapes.
+  exactly (`norway-open-data-mcp@0.5.0`) if you depend on tool shapes.
 - **Major** — reserved for 1.0 onwards.
 
 Treated as breaking: removing or renaming a tool, removing an input or output
 field, tightening an input schema, or changing a tool's meaning. Tool **names**
 are stable identifiers and are never translated.
 
-The `norway-open-data-sdk` dependency is pinned to `^0.8.0`. Because the SDK is
+The `norway-open-data-sdk` dependency is pinned to `^0.9.0`. Because the SDK is
 also pre-1.0, its own breaking changes ship as minor versions and are therefore
 **not** picked up by that caret range automatically — SDK upgrades are
 deliberate, reviewed changes here.

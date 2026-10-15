@@ -4,6 +4,110 @@ All notable changes to this project are documented here. This project follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html); see the versioning
 policy in the README for what "breaking" means before 1.0.
 
+## 0.5.0 — 2026-10-16
+
+Adds six weather, tide and climate tools built on the new MET Norway products,
+the `tides` and `climate` namespaces and `profiles.conditionsAtLocation()` in
+`norway-open-data-sdk@0.9.0`. The curated tool set grows from 28 to 34. **No
+existing tool changes its name, input schema or data payload, and the first
+twenty-eight entries of `tools/list` keep their names and their order** — the six
+new tools are appended, and a test pins the whole prefix rather than assuming it.
+
+One new, optional environment variable: `NORWAY_MCP_MET_FROST_CLIENT_ID`, a free
+Frost client ID for the weather-history tool. Twenty-five of the thirty-four
+tools work with no configuration at all; nine need some.
+
+### Added
+
+- Three MET Norway point tools, each needing `NORWAY_MCP_CONTACT_EMAIL` like the
+  forecast:
+  - `get_norwegian_weather_warnings` — MET Norway's official MetAlerts warnings
+    for a point, a county or all of Norway, filterable by event and land or
+    marine domain, in Norwegian or English. Every warning keeps its message type,
+    so a `Cancel` is never read as an active warning, plus its awareness level and
+    colour, validity window and domain. An empty list is never an all-clear and
+    says so, pointing to `get_current_norwegian_hazards` for NVE's flood,
+    landslide and avalanche warnings; MET's `rainFlood` and `stormSurge` warnings
+    carry the same pointer. Warning areas are off by default and, when requested,
+    returned whole or not at all under the existing 4,000-vertex budget. A
+    nationwide answer is capped at 50 warnings in MetAlerts' order, with the cut
+    reported.
+  - `get_norwegian_precipitation_nowcast` — radar precipitation for roughly the
+    next two hours in five-minute steps. A point outside the Nordic radar area,
+    which excludes Svalbard, is a `null` nowcast with the reason, not an error,
+    and a radar status other than `ok` is flagged.
+  - `get_norwegian_sun_times` — sunrise, sunset, solar noon and solar midnight in
+    the Europe/Oslo offset for the date. Midnight sun and polar night are reported
+    as `polarCondition`, an answer rather than missing data.
+- `get_norwegian_tides` — Kartverket's predicted high and low waters for the next
+  1–168 hours (default 48), at chart datum, mean sea level or NN2000, optionally
+  with hourly observed, predicted, weather-effect and forecast water levels for
+  the first 48 hours, each series type kept separate. Every result names the
+  reference level and the station, factor and delay the values were modelled
+  from, states that times are UTC and credits the Hydrographic Service. An inland
+  or far-offshore point is `covered: false`, not an error. Anonymous.
+- `get_norwegian_weather_history` — **experimental.** Past observations from MET
+  Norway's Frost archive at a named station or at the nearest station reporting
+  every requested element: hourly temperature, wind, humidity and precipitation
+  over up to 4 days, or daily mean, minimum and maximum temperature, precipitation
+  and gusts over up to 100 days, from a fixed list of elements mapped to Frost
+  element IDs. Optional 1991–2020 monthly normals for the months the window
+  touches. Values are never filled or interpolated, and no observations is "no
+  data for this station and window", not an error. A future start date is
+  refused. Needs `NORWAY_MCP_MET_FROST_CLIENT_ID`.
+- `get_weather_conditions_profile` — **experimental.** One coordinate's weather,
+  sea and daylight picture from the SDK's `profiles.conditionsAtLocation()`:
+  municipality, forecast, nowcast, MET warnings, NVE warnings for the
+  municipality, sun times, ocean forecast, tide table, air quality and the
+  nearest Frost station's latest observations beside its monthly normal. The SDK
+  composes; `not-configured` and `provider-error` sections are listed in
+  `partial.missing` as `section: reason`, the SDK's notices are merged into the
+  warnings, and provenance credits each real provider, with `met` and
+  `met-frost` as separate entries. Works with no configuration; the contact email
+  and the Frost ID each add sections.
+- `NORWAY_MCP_MET_FROST_CLIENT_ID`, read as one value rather than a
+  client-credentials pair, checked against the SDK's own rule (printable ASCII
+  without a colon), dropped and reported by `--doctor` when malformed, passed to
+  the SDK as `credentials["met-frost"]`, redacted by value everywhere and masked
+  by `--doctor`.
+- `PRE_WEATHER_TOOL_ORDER` and `WEATHER_TOOL_NAMES` in `src/tools/registry.ts`,
+  so the twenty-eight-tool prefix and the six appended names are asserted.
+- Fake-SDK fixtures for the new surface: MetAlerts warnings including a
+  cancellation and a named storm-surge event, a nowcast, ordinary, midnight-sun
+  and polar-night sun times, a tide table and water levels, a Frost station,
+  daily and hourly observations and normals, and complete and anonymous
+  conditions profiles. The Frost and tide sources are copied from the 0.9.0
+  provider registry, and the new attribution tests compare against that registry
+  directly.
+- Routing cases in Norwegian and English for each new ambiguity pair, and live
+  cases for every new tool: tides and the profile run anonymously, the MET tools
+  run when a contact email is set, and the Frost cases — which confirm that every
+  offered element ID returns data — run when a Frost client ID is set.
+
+### Changed
+
+- `norway-open-data-sdk` requirement raised to `^0.9.0`, with the version floor
+  test updated to match: the new tools call methods that do not exist on 0.8.0.
+- `EXPECTED_TOOL_COUNT` is 34. `--doctor` reports `Tools (34)`, names the three
+  new MET tools and the profile's MET sections in its contact-email note, and
+  adds a note for the Frost client ID.
+- A Frost `ConfigurationError` from the SDK is reported as `missing_configuration`
+  naming `NORWAY_MCP_MET_FROST_CLIENT_ID`, never the SDK's
+  `credentials["met-frost"].clientId` wording. Other providers' configuration
+  errors are unchanged.
+- Descriptions of `get_norwegian_weather_forecast`, `get_current_norwegian_hazards`,
+  `get_marine_forecast` and `get_norwegian_location_profile` gained one
+  cross-reference each to the new tool that answers the neighbouring question.
+  Their names, schemas and payloads are unchanged.
+- The fake SDK's MET Norway and Kartverket documentation links now match the
+  0.9.0 provider registry.
+- Documentation: README, tool catalogue, capability matrix, design, privacy,
+  architecture, test plan and Inspector checklist cover the new tools, the Frost
+  variable, what was deferred and why, and the corrected SDK counts (135 methods
+  across 24 namespaces; the earlier "80+ methods across 21 namespaces" was
+  already out of date). `docs/privacy.md` now says the credential patterns
+  strip Basic as well as Bearer authorization.
+
 ## 0.4.0 — 2026-07-26
 
 Adds a curated geospatial toolset built on the new `geodata`, `environment` and

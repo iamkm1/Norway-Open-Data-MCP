@@ -31,7 +31,10 @@ ENVIRONMENT
   ${ENV_VARS.applicationName}      Caller identity sent to providers that require one.
                               Defaults to ${PACKAGE_NAME}/${PACKAGE_VERSION}.
   ${ENV_VARS.contactEmail}  Contact address required by MET Norway. Without it the
-                              weather tool returns a clear configuration error.
+                              forecast, weather-warning, nowcast and sun-times
+                              tools return a clear configuration error, and the
+                              MET sections of the location and conditions
+                              profiles are omitted.
   ${ENV_VARS.nveApiKey}    Optional free NVE HydAPI key. No current tool requires it.
   ${ENV_VARS.barentswatchClientId}
   ${ENV_VARS.barentswatchClientSecret}
@@ -46,6 +49,12 @@ ENVIRONMENT
                               get_vessel_profile, get_vessel_track and
                               get_live_vessel_positions return a configuration
                               error. Every other tool keeps working.
+  ${ENV_VARS.metFrostClientId}
+                              Free MET Norway Frost client ID (one value, no
+                              secret). Without it get_norwegian_weather_history
+                              returns a configuration error and the observations
+                              section of get_weather_conditions_profile is
+                              omitted.
   ${ENV_VARS.timeoutMs}     Request timeout in ms (1000-60000, default 10000).
   ${ENV_VARS.retries}       Retry attempts after the first (0-5, default 2).
   ${ENV_VARS.cache}         In-process response cache (1 or 0, default 1).

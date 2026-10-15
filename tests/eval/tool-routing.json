@@ -1021,6 +1021,284 @@
       }
     },
     {
+      "id": "weather-warnings-wind-county-en",
+      "question": "Is there a yellow wind warning for Vestland today?",
+      "language": "en",
+      "expectedTool": "get_norwegian_weather_warnings",
+      "mustNotSelect": ["get_current_norwegian_hazards", "get_norwegian_weather_forecast"],
+      "reason": "Wind warnings are MET Norway weather warnings from MetAlerts; NVE's Varsom feeds cover only flood, avalanche and landslide.",
+      "requiredArguments": {
+        "countyCode": "46",
+        "event": "wind"
+      }
+    },
+    {
+      "id": "weather-warnings-storm-surge-no",
+      "question": "Har Meteorologisk institutt sendt ut farevarsel om stormflo langs kysten?",
+      "language": "no",
+      "expectedTool": "get_norwegian_weather_warnings",
+      "mustNotSelect": ["get_current_norwegian_hazards"],
+      "reason": "Storm surge (stormflo) sounds like flooding but is a MET Norway marine weather warning, not an NVE flood warning.",
+      "requiredArguments": {
+        "event": "stormSurge",
+        "geographicDomain": "marine"
+      }
+    },
+    {
+      "id": "hazards-river-flood-not-met-en",
+      "question": "Is there a flood warning for the rivers in Gudbrandsdalen today?",
+      "language": "en",
+      "expectedTool": "get_current_norwegian_hazards",
+      "mustNotSelect": ["get_norwegian_weather_warnings"],
+      "reason": "River flood warnings are NVE's (flomvarsel on Varsom). MET's rainFlood warning is about the rain, so the NVE tool answers this.",
+      "requiredArguments": {
+        "types": ["flood"]
+      }
+    },
+    {
+      "id": "hazards-avalanche-not-met-no",
+      "question": "Er det snøskredvarsel i Lyngsalpene i dag, eller bare vindvarsel?",
+      "language": "no",
+      "expectedTool": "get_current_norwegian_hazards",
+      "mustNotSelect": ["get_norwegian_weather_warnings"],
+      "reason": "Avalanche warnings come only from NVE; the question names avalanche first, and a MET wind warning would be a separate follow-up.",
+      "requiredArguments": {
+        "types": ["avalanche"]
+      }
+    },
+    {
+      "id": "weather-warnings-point-en",
+      "question": "Are there any official weather warnings in force at 69.65, 18.96 right now?",
+      "language": "en",
+      "expectedTool": "get_norwegian_weather_warnings",
+      "mustNotSelect": ["get_norwegian_weather_forecast"],
+      "reason": "The user asks whether an official warning applies, not what the weather will be; MetAlerts tests the point against its warning areas.",
+      "requiredArguments": {
+        "latitude": 69.65,
+        "longitude": 18.96
+      }
+    },
+    {
+      "id": "weather-warnings-county-no",
+      "question": "Er det noen farevarsler for vær i Troms fylke nå?",
+      "language": "no",
+      "expectedTool": "get_norwegian_weather_warnings",
+      "mustNotSelect": ["get_norwegian_weather_forecast"],
+      "reason": "Farevarsler are warnings, not a forecast. Troms is county 55.",
+      "requiredArguments": {
+        "countyCode": "55"
+      },
+      "expectedClarification": "The county number for Troms (55) must be known; the tool takes a two-digit code or a point."
+    },
+    {
+      "id": "nowcast-next-half-hour-en",
+      "question": "Will it start raining in the next half hour at 59.91, 10.75?",
+      "language": "en",
+      "expectedTool": "get_norwegian_precipitation_nowcast",
+      "mustNotSelect": ["get_norwegian_weather_forecast"],
+      "reason": "Minutes-ahead rain is the radar nowcast's job; the hourly forecast cannot say when in the next half hour rain starts.",
+      "requiredArguments": {
+        "latitude": 59.91,
+        "longitude": 10.75
+      }
+    },
+    {
+      "id": "nowcast-next-hour-no",
+      "question": "Kommer det regn i løpet av den neste timen på 60.39, 5.32?",
+      "language": "no",
+      "expectedTool": "get_norwegian_precipitation_nowcast",
+      "mustNotSelect": ["get_norwegian_weather_forecast"],
+      "reason": "The next hour, step by step, is the radar nowcast rather than the multi-hour forecast.",
+      "requiredArguments": {
+        "latitude": 60.39,
+        "longitude": 5.32
+      }
+    },
+    {
+      "id": "sun-times-polar-night-en",
+      "question": "Does the sun rise at all in Tromsø on 21 December 2026?",
+      "language": "en",
+      "expectedTool": "get_norwegian_sun_times",
+      "mustNotSelect": ["get_norwegian_weather_forecast"],
+      "reason": "Sunrise and polar night are astronomical answers from MET's sunrise product, not weather; polarCondition explains a day with no sunrise.",
+      "requiredArguments": {
+        "latitude": 69.65,
+        "longitude": 18.96,
+        "date": "2026-12-21"
+      }
+    },
+    {
+      "id": "sun-times-sunset-no",
+      "question": "Når går sola ned i Bodø i dag?",
+      "language": "no",
+      "expectedTool": "get_norwegian_sun_times",
+      "mustNotSelect": ["get_norwegian_weather_forecast", "get_weather_conditions_profile"],
+      "reason": "Only the sunset time is asked for; the single-purpose sun tool answers it in one call.",
+      "requiredArguments": {
+        "latitude": 67.28,
+        "longitude": 14.4
+      }
+    },
+    {
+      "id": "history-coldest-january-en",
+      "question": "How cold did it get at Oslo – Blindern (SN18700) in the first week of January 2026?",
+      "language": "en",
+      "expectedTool": "get_norwegian_weather_history",
+      "mustNotSelect": ["get_norwegian_weather_forecast"],
+      "reason": "A past period is observations from Frost, never a forecast.",
+      "requiredArguments": {
+        "stationId": "SN18700",
+        "resolution": "daily",
+        "startDate": "2026-01-01",
+        "endDate": "2026-01-07",
+        "elements": ["min_air_temperature"]
+      }
+    },
+    {
+      "id": "history-rain-september-no",
+      "question": "Hvor mye regn kom det i Bergen (60.39, 5.32) i september 2026?",
+      "language": "no",
+      "expectedTool": "get_norwegian_weather_history",
+      "mustNotSelect": ["get_norwegian_weather_forecast"],
+      "reason": "Hvor mye regn kom det asks what fell, so it is observed history from the nearest station.",
+      "requiredArguments": {
+        "latitude": 60.39,
+        "longitude": 5.32,
+        "resolution": "daily",
+        "startDate": "2026-09-01",
+        "endDate": "2026-09-30",
+        "elements": ["precipitation"]
+      }
+    },
+    {
+      "id": "tides-high-tide-en",
+      "question": "When is high tide in Bergen harbour over the next two days?",
+      "language": "en",
+      "expectedTool": "get_norwegian_tides",
+      "mustNotSelect": ["get_marine_forecast"],
+      "reason": "High and low water are Kartverket tide predictions; the marine forecast covers waves and currents.",
+      "requiredArguments": {
+        "latitude": 60.398,
+        "longitude": 5.32,
+        "hours": 48
+      }
+    },
+    {
+      "id": "tides-low-water-no",
+      "question": "Når er det fjære i Tromsø i dag, og hvor høy er vannstanden?",
+      "language": "no",
+      "expectedTool": "get_norwegian_tides",
+      "mustNotSelect": ["get_marine_forecast"],
+      "reason": "Fjære and vannstand are tide and water level, not sea state.",
+      "requiredArguments": {
+        "latitude": 69.65,
+        "longitude": 18.96,
+        "hours": 24,
+        "includeWaterLevels": true
+      }
+    },
+    {
+      "id": "marine-waves-not-tides-en",
+      "question": "How big are the waves off Stad right now?",
+      "language": "en",
+      "expectedTool": "get_marine_forecast",
+      "mustNotSelect": ["get_norwegian_tides"],
+      "reason": "Wave height is sea state from the BarentsWatch marine forecast, not a tide.",
+      "requiredArguments": {
+        "latitude": 62.2,
+        "longitude": 5.1
+      }
+    },
+    {
+      "id": "conditions-coordinate-en",
+      "question": "What are conditions like right now at 68.23, 14.56 — weather, tide and daylight?",
+      "language": "en",
+      "expectedTool": "get_weather_conditions_profile",
+      "mustNotSelect": ["get_norwegian_location_profile", "get_norwegian_weather_forecast"],
+      "reason": "A bare coordinate with several kinds of conditions at once is the conditions profile; there is no address to resolve.",
+      "requiredArguments": {
+        "latitude": 68.23,
+        "longitude": 14.56
+      }
+    },
+    {
+      "id": "location-profile-address-not-conditions-no",
+      "question": "Hvordan er det ved Storgata 1 i Tromsø nå, med vær og veier?",
+      "language": "no",
+      "expectedTool": "get_norwegian_location_profile",
+      "mustNotSelect": ["get_weather_conditions_profile"],
+      "reason": "A street address with roads is the location profile, which resolves the address first.",
+      "requiredArguments": {
+        "query": "Storgata 1, Tromsø"
+      }
+    },
+    {
+      "id": "conditions-coordinate-no",
+      "question": "Hvordan er forholdene på 63.43, 10.39 akkurat nå – vær, tidevann og sol?",
+      "language": "no",
+      "expectedTool": "get_weather_conditions_profile",
+      "mustNotSelect": ["get_norwegian_location_profile"],
+      "reason": "A coordinate and a combined picture of weather, sea and daylight.",
+      "requiredArguments": {
+        "latitude": 63.43,
+        "longitude": 10.39
+      }
+    },
+    {
+      "id": "conditions-overview-en",
+      "question": "Give me an overview of the weather and sea conditions at 58.97, 5.73 for the next six hours.",
+      "language": "en",
+      "expectedTool": "get_weather_conditions_profile",
+      "mustNotSelect": ["get_norwegian_weather_forecast"],
+      "reason": "An overview across weather, sea and warnings is the profile; a forecast alone would miss the sea.",
+      "requiredArguments": {
+        "latitude": 58.97,
+        "longitude": 5.73,
+        "hours": 6
+      }
+    },
+    {
+      "id": "forecast-not-conditions-no",
+      "question": "Gi meg timesvarselet for 60.39, 5.32 for de neste 48 timene.",
+      "language": "no",
+      "expectedTool": "get_norwegian_weather_forecast",
+      "mustNotSelect": ["get_weather_conditions_profile"],
+      "reason": "One product in full detail — an hourly forecast for two days — is the forecast tool.",
+      "requiredArguments": {
+        "latitude": 60.39,
+        "longitude": 5.32,
+        "hours": 48
+      }
+    },
+    {
+      "id": "history-past-days-not-conditions-en",
+      "question": "What were the daily temperatures at the weather station nearest 60.39, 5.32 from 10 to 12 October 2026?",
+      "language": "en",
+      "expectedTool": "get_norwegian_weather_history",
+      "mustNotSelect": ["get_weather_conditions_profile"],
+      "reason": "A past period is weather history; the profile only reports the latest observations.",
+      "requiredArguments": {
+        "latitude": 60.39,
+        "longitude": 5.32,
+        "resolution": "daily",
+        "startDate": "2026-10-10",
+        "endDate": "2026-10-12",
+        "elements": ["mean_air_temperature", "min_air_temperature", "max_air_temperature"]
+      }
+    },
+    {
+      "id": "conditions-now-not-history-no",
+      "question": "Hvor varmt er det på målestasjonen nærmest 59.91, 10.75 akkurat nå?",
+      "language": "no",
+      "expectedTool": "get_weather_conditions_profile",
+      "mustNotSelect": ["get_norwegian_weather_history"],
+      "reason": "Akkurat nå is current conditions; the profile carries the nearest station's latest observations.",
+      "requiredArguments": {
+        "latitude": 59.91,
+        "longitude": 10.75
+      }
+    },
+    {
       "id": "geospatial-out-of-scope-wfs-en",
       "question": "Fetch every feature from https://kart.example.no/geoserver/wfs and show me the polygons.",
       "language": "en",

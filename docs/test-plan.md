@@ -17,7 +17,7 @@ declares.
 
 ## Unit tests — per tool
 
-Each of the twenty-eight tools is tested for the full matrix required by the
+Each of the thirty-four tools is tested for the full matrix required by the
 brief:
 
 1. valid request
@@ -129,6 +129,62 @@ because their failure modes are shared rather than per-tool:
   catalogue id → non-retryable `not_found`; a failed current-protection lookup
   failing the call, while a failed _proposal_ lookup returns a partial result.
 
+## Weather, tide and climate tests
+
+Three files cover the six tools added in 0.5.0, each tool against the full
+matrix above. Attribution is asserted against the installed SDK's own
+`providerDescriptors` through `tests/helpers/registry.ts`, not against the fakes,
+so a fixture that drifts from the real registry fails.
+
+`tests/unit/weather-tools.test.ts` — the three MET Norway point tools:
+
+- **Warnings.** Point, county and nationwide queries with every filter forwarded;
+  a point and a county together refused before any request; MetAlerts order
+  kept; `messageType` present and a `Cancel` called out as not active; the NVE
+  pointer whenever `rainFlood` or `stormSurge` appears; an empty list carrying
+  "not an all-clear" and naming `get_current_norwegian_hazards`; the 50-warning
+  cut reported with how to narrow it; warning areas off by default with their
+  shape still summarized, and when requested returned whole for every GeoJSON
+  type MetAlerts may publish — a polygon's hole ring for ring, every part of a
+  multipolygon — with an oversized area dropped whole and a result's geometry
+  budget enforced.
+- **Nowcast.** Covered points, a point outside the radar area as a `null`
+  section that is not an error, a radar status other than `ok` flagged, and an
+  over-long series bounded and reported.
+- **Sun times.** The date defaulted from the injected clock, midnight sun and
+  polar night reported as answers, and a missing sunrise or sunset without a
+  polar condition explained rather than left blank.
+- Each tool refuses to run without the contact email, naming it exactly, and
+  never contacts MET Norway in that case.
+
+`tests/unit/tides-climate-tools.test.ts` — tides and Frost history:
+
+- **Tides.** The UTC window built from the clock; reference level, station,
+  factor and delay always present; water levels requested only when asked and
+  only for a covered point, for at most 48 hours, with each series type kept
+  separate; an inland point as `covered: false`; a failed water-level request as
+  a partial result that keeps the tide table; cancellation during the second
+  request aborting the call rather than degrading into a partial result.
+- **Weather history.** Station by id and nearest station by point, with the
+  element IDs and the exclusive `to` the SDK receives pinned; every window
+  bound from both sides; elements refused at the wrong resolution; a future
+  start date refused by the injected clock with the field named; no observations
+  as no data, not an error; unknown stations as `not_found`; normals selected
+  for the months a window touches, across a year end, with day-of-month normals
+  excluded; a failed normals request as a partial result; station fields
+  whitelisted so a station-holder field can never reach a result; the SDK's
+  `credentials["met-frost"]` wording rewritten to the variable name; and the
+  Frost client ID and a Basic credential echoed in a provider error redacted.
+
+`tests/unit/conditions-profile.test.ts` — the conditions profile: one SDK call;
+every section with all providers configured; the anonymous profile with the MET
+and Frost sections listed in `partial.missing` as `section: not-configured` and
+each omission naming its variable; `not-covered` sections not called partial; a
+provider failure keeping the other sections with the SDK's notice verbatim;
+provenance with `met` and `met-frost` separate, NVE's three feeds each with its
+own wording and the composite absent; warning areas never included; and every
+list bounded.
+
 Cancellation and no-URL coverage live with the registry-driven suites: the
 geospatial tools are picked up automatically by `tests/unit/cancellation.test.ts`,
 and `tests/unit/server-contract.test.ts` asserts that **no tool anywhere**
@@ -165,8 +221,12 @@ official MCP `Client` over `StdioClientTransport`:
 - `tools/list` — asserts the **exact tool count matches
   `EXPECTED_TOOL_COUNT`** and that names, titles, descriptions and input schemas
   are present and non-empty
-- the twenty pre-geospatial tools are still the **first twenty**, in their
-  original order, with the eight geospatial tools appended
+- the twenty-eight pre-weather tools are still the **first twenty-eight**, in
+  their original order, with the six weather, tide and climate tools appended
+- each gated weather tool names its exact variable over stdio
+  (`NORWAY_MCP_CONTACT_EMAIL` or `NORWAY_MCP_MET_FROST_CLIENT_ID`), and malformed
+  tide, profile, warning and history requests are refused, all without a
+  provider request
 - every geospatial tool is advertised with a strict schema, an output schema and
   read-only annotations
 - an out-of-range coordinate, an over-large limit, an inverted box, a
@@ -239,6 +299,24 @@ needing no new credential:
 - Two negative cases against the live server: a country-sized bounding box
   refused **locally**, verified by elapsed time too short for a round trip, and a
   service URL refused where a catalogue identifier belongs.
+
+The weather, tide and climate tools have live cases too:
+
+- Anonymous, always: a tide table for Bergen with the Hydrographic Service
+  credit and the UTC note, hourly water levels with distinct series types, an
+  inland point as `covered: false`, and a composed conditions profile for Bergen
+  that credits real providers only and, without configuration, lists the MET and
+  Frost sections as `not-configured`.
+- With `NORWAY_MCP_CONTACT_EMAIL`: current warnings for Norway with valid
+  message types and no geometry by default, a nowcast for Oslo and none for
+  Svalbard, and polar night in Tromsø with the +01:00 offset. Without it, each of
+  the three tools is asserted to fail cleanly, naming the variable.
+- With `NORWAY_MCP_MET_FROST_CLIENT_ID`: daily history at Blindern and hourly
+  history at the station nearest Oslo, each asserting that **every offered
+  element ID returns data** — the confirmation the experimental Frost mapping
+  needs on its first credentialed run — plus 1991–2020 normals. Without it, the
+  tool is asserted to fail cleanly, naming the variable rather than the SDK's
+  credential path.
 
 ## Coverage thresholds
 

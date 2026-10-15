@@ -12,14 +12,16 @@ pnpm build && npx -y @modelcontextprotocol/inspector node dist/cli.js
 
 Inspector version verified against: **`@modelcontextprotocol/inspector@1.0.0`**.
 
-To exercise the credential-gated tool, launch it with the variable set:
+To exercise the credential-gated tools, launch it with the variables set — your
+own contact address for MET Norway and your own free Frost client ID:
 
 ```bash
 # macOS / Linux
-NORWAY_MCP_CONTACT_EMAIL=you@example.com npx -y @modelcontextprotocol/inspector node dist/cli.js
+NORWAY_MCP_CONTACT_EMAIL=you@example.com NORWAY_MCP_MET_FROST_CLIENT_ID=your-frost-client-id \
+  npx -y @modelcontextprotocol/inspector node dist/cli.js
 
 # Windows PowerShell
-$env:NORWAY_MCP_CONTACT_EMAIL="you@example.com"; npx -y @modelcontextprotocol/inspector node dist/cli.js
+$env:NORWAY_MCP_CONTACT_EMAIL="you@example.com"; $env:NORWAY_MCP_MET_FROST_CLIENT_ID="your-frost-client-id"; npx -y @modelcontextprotocol/inspector node dist/cli.js
 ```
 
 > **Never commit Inspector output.** It writes session tokens and proxy
@@ -43,7 +45,8 @@ Record the date and the commit you tested.
 
 ### Tool listing
 
-- [ ] Exactly **28** tools are listed.
+- [ ] Exactly **34** tools are listed, the six weather, tide and climate tools
+      last.
 - [ ] Every tool shows a human-readable **title** (e.g. "Search Norwegian
       companies"), not just the identifier.
 - [ ] Every description states both when to use the tool **and when not to**.
@@ -57,6 +60,15 @@ Record the date and the commit you tested.
   - [ ] `get_nature_types_at` vs `get_land_resources_at`
   - [ ] `get_nature_profile` vs the five single-dataset nature tools
   - [ ] `search_geonorge_datasets` vs `get_geonorge_metadata`
+  - [ ] `get_norwegian_weather_warnings` vs `get_current_norwegian_hazards` —
+        each names the other; MET's `rainFlood`/`stormSurge` vs NVE's floods
+  - [ ] `get_norwegian_weather_warnings` vs `get_norwegian_weather_forecast`
+  - [ ] `get_norwegian_precipitation_nowcast` vs `get_norwegian_weather_forecast`
+  - [ ] `get_norwegian_weather_history` vs `get_norwegian_weather_forecast`
+  - [ ] `get_norwegian_tides` vs `get_marine_forecast`
+  - [ ] `get_weather_conditions_profile` vs `get_norwegian_location_profile`
+  - [ ] `get_weather_conditions_profile` vs `get_norwegian_weather_forecast`
+  - [ ] `get_norwegian_weather_history` vs `get_weather_conditions_profile`
 - [ ] **No tool's input form contains a URL, endpoint, host, service, layer or
       type-name field.** That absence is the structural guarantee that this
       server is not a map-service proxy.
@@ -72,6 +84,12 @@ Record the date and the commit you tested.
 - [ ] `includeGeometry` defaults to **false** on every geospatial tool.
 - [ ] `get_intervention_free_nature_at` and `get_nature_profile` show a minimum
       `limit` of **2**, and their validation message explains why.
+- [ ] `includeGeometry` defaults to **false** on `get_norwegian_weather_warnings`.
+- [ ] `get_norwegian_tides` shows `hours` 48 (max 168), `referenceLevel`
+      `chart-datum` and `includeWaterLevels` false; `get_weather_conditions_profile`
+      shows `hours` 12 (max 48); `get_norwegian_weather_history` offers
+      `resolution` `hourly`/`daily` and the fixed element names, and has no
+      free-form element field.
 
 ### Successful calls
 
@@ -120,6 +138,32 @@ not re-run rapidly, to stay well inside provider budgets.
 - [ ] `get_nature_profile` with `{ "latitude": 61.6365, "longitude": 8.3126 }` →
       every section, `compositeSource` present in `data`, and `sources` listing
       the real providers **without** the composite id.
+- [ ] `get_norwegian_tides` with `{ "latitude": 60.398, "longitude": 5.32 }` →
+      high and low waters with `referenceLevel`, the station, factor and delay,
+      a UTC note, and the Hydrographic Service credit in `sources` and the text.
+- [ ] The same call with `"includeWaterLevels": true` → separate
+      `observation`, `prediction`, `weathereffect` and `forecast` series.
+- [ ] `get_norwegian_tides` with `{ "latitude": 61.115, "longitude": 10.466 }`
+      (inland) → `covered: false`, not an error.
+- [ ] `get_weather_conditions_profile` with `{ "latitude": 60.398, "longitude": 5.32 }`
+      → municipality Bergen, tides and NVE sections; without the contact email
+      and Frost ID, the MET and Frost sections are `null` and listed in
+      `partial.missing` as `section: not-configured`.
+- [ ] `get_norwegian_weather_warnings` with `{}` → current warnings for Norway or
+      an empty list with the not-an-all-clear note naming NVE's tool _(requires
+      the contact email)_.
+- [ ] `get_norwegian_precipitation_nowcast` with `{ "latitude": 78.2232, "longitude": 15.6267 }`
+      (Longyearbyen) → `coverage: "outside-radar-area"`, not an error _(requires
+      the contact email)_.
+- [ ] `get_norwegian_sun_times` with
+      `{ "latitude": 69.6492, "longitude": 18.9553, "date": "2026-12-21" }` →
+      `polarCondition: "polar-night"` _(requires the contact email)_.
+- [ ] `get_norwegian_weather_history` with
+      `{ "stationId": "SN18700", "startDate": "<a week ago>", "endDate": "<yesterday>" }`
+      → daily records for every element, and `sources` crediting MET Norway
+      Frost _(requires the Frost client ID)_.
+- [ ] With both values set, the conditions profile lists `met` and `met-frost`
+      as separate entries in `sources`.
 
 For each result:
 
@@ -136,12 +180,24 @@ For each result:
       environmental clearance" in the text tab too.
 - [ ] `sources` on the nature profile lists **two** Naturbase entries when the
       intervention-free section answered, because its licence terms differ.
+- [ ] Every result carrying MET Norway warnings carries the "never an
+      all-clear" warning naming `get_current_norwegian_hazards`, and a `Cancel`
+      message reads as cancelled in the text tab.
+- [ ] Weather history and the conditions profile both say they are
+      experimental.
 
 ### Error paths
 
 - [ ] Unset `NORWAY_MCP_CONTACT_EMAIL` and call
       `get_norwegian_weather_forecast` → an error naming
-      `NORWAY_MCP_CONTACT_EMAIL` exactly. The server stays connected.
+      `NORWAY_MCP_CONTACT_EMAIL` exactly. The server stays connected. The three
+      new MET tools behave the same way.
+- [ ] Unset `NORWAY_MCP_MET_FROST_CLIENT_ID` and call
+      `get_norwegian_weather_history` → an error naming
+      `NORWAY_MCP_MET_FROST_CLIENT_ID`, never `credentials["met-frost"]`.
+- [ ] Call `get_norwegian_weather_warnings` with a point **and** a `countyCode` →
+      refused; call `get_norwegian_weather_history` with a future `startDate` →
+      refused, naming the forecast tool.
 - [ ] Call `search_norwegian_companies` with `{ "limit": -1 }` → a validation
       error; no provider request is made.
 - [ ] Call `get_norwegian_company_profile` with `{ "organizationNumber": "000000000" }`
@@ -178,6 +234,7 @@ For each result:
 
 ## Result log
 
-| Date       | Version | Inspector | Outcome                    | Notes                                                                                                                                                                                                                                                                                                                                                         |
-| ---------- | ------- | --------- | -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 2026-07-23 | 0.1.0   | 1.0.0     | Automated equivalents pass | Full protocol surface (initialize, tools/list with 10 tools, schemas, success, error, cancellation, stdout purity, clean shutdown) is covered by `tests/integration/protocol.test.ts`, which drives the same built binary the Inspector launches. The interactive UI pass above requires a human at a browser and live provider access; it is not part of CI. |
+| Date       | Version | Inspector | Outcome                    | Notes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| ---------- | ------- | --------- | -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-07-23 | 0.1.0   | 1.0.0     | Automated equivalents pass | Full protocol surface (initialize, tools/list with 10 tools, schemas, success, error, cancellation, stdout purity, clean shutdown) is covered by `tests/integration/protocol.test.ts`, which drives the same built binary the Inspector launches. The interactive UI pass above requires a human at a browser and live provider access; it is not part of CI.                                                                                                                                                                                                                                            |
+| 2026-10-16 | 0.5.0   | not run   | Automated equivalents pass | `tests/integration/protocol.test.ts` drove the built binary over stdio: 34 tools with the twenty-eight earlier ones first, strict schemas, each gated weather tool naming its variable, malformed tide, profile, warning and history requests refused, cancellation and stdout purity. Live: tides, water levels, an inland point and the anonymous conditions profile answered from Kartverket and NVE. Not done: the interactive UI pass, and the MET Norway and Frost live calls, because no contact email or Frost client ID was configured — the Frost element IDs are therefore still unconfirmed. |

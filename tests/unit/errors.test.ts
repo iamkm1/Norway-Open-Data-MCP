@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   ConfigurationRequiredError,
+  InvalidToolInputError,
   ResultTooLargeError,
   UpstreamNotFoundError,
   describeToolError,
@@ -58,6 +59,50 @@ describe("SDK error mapping", () => {
     expect(map(new UpstreamNotFoundError("no stop", "entur"))).toMatchObject({
       code: "not_found",
       provider: "entur",
+    });
+  });
+});
+
+describe("configuration errors name the environment variable", () => {
+  it("rewrites the SDK's Frost credential path into NORWAY_MCP_MET_FROST_CLIENT_ID", () => {
+    // norway-open-data-sdk@0.9.0 wording, for a missing and for a malformed ID.
+    for (const message of [
+      'Frost requests require credentials["met-frost"].clientId, a free client ID from https://frost.met.no/auth/requestCredentials.html.',
+      'credentials["met-frost"].clientId must be a Frost client ID: printable ASCII without a colon.',
+    ]) {
+      const payload = map(sdkError("ConfigurationError", message, { provider: "met-frost" }));
+
+      expect(payload).toMatchObject({
+        code: "missing_configuration",
+        provider: "met-frost",
+        retryable: false,
+        requiredConfiguration: ["NORWAY_MCP_MET_FROST_CLIENT_ID"],
+      });
+      expect(payload.message).toContain("NORWAY_MCP_MET_FROST_CLIENT_ID");
+      expect(payload.message).not.toContain('credentials["met-frost"]');
+      expect(describeToolError(payload)).toContain(
+        "Set NORWAY_MCP_MET_FROST_CLIENT_ID and restart the MCP server.",
+      );
+    }
+  });
+
+  it("leaves other providers' configuration errors as the SDK worded them", () => {
+    const payload = map(
+      sdkError("ConfigurationError", "MET Norway requires contactEmail.", { provider: "met" }),
+    );
+    expect(payload.message).toBe("MET Norway requires contactEmail.");
+    expect(payload.requiredConfiguration).toBeUndefined();
+  });
+});
+
+describe("handler-level input errors", () => {
+  it("map to invalid_input with the field that was wrong", () => {
+    const payload = map(new InvalidToolInputError("startDate", "startDate is in the future."));
+
+    expect(payload).toMatchObject({
+      code: "invalid_input",
+      retryable: false,
+      fields: [{ path: "startDate", message: "startDate is in the future." }],
     });
   });
 });

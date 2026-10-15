@@ -26,6 +26,14 @@ export type ServerConfig = {
   /** BarentsWatch OAuth2 client credentials for the `ais` scope. */
   barentswatchAisClientId?: string | undefined;
   barentswatchAisClientSecret?: string | undefined;
+  /**
+   * A free MET Norway Frost client ID, used by the weather-history tool and the
+   * observations section of the conditions profile.
+   *
+   * One value, not a pair: Frost takes the ID as the HTTP Basic username and
+   * needs no secret, so it is never read as a client-credentials pair.
+   */
+  metFrostClientId?: string | undefined;
   timeoutMs: number;
   retries: number;
   /** In-process response cache. Never written to disk. */
@@ -58,6 +66,7 @@ export const ENV_VARS = {
   barentswatchClientSecret: "NORWAY_MCP_BARENTSWATCH_CLIENT_SECRET",
   barentswatchAisClientId: "NORWAY_MCP_BARENTSWATCH_AIS_CLIENT_ID",
   barentswatchAisClientSecret: "NORWAY_MCP_BARENTSWATCH_AIS_CLIENT_SECRET",
+  metFrostClientId: "NORWAY_MCP_MET_FROST_CLIENT_ID",
   timeoutMs: "NORWAY_MCP_TIMEOUT_MS",
   retries: "NORWAY_MCP_RETRIES",
   cache: "NORWAY_MCP_CACHE",

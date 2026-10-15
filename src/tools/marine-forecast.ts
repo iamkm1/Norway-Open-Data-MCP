@@ -270,7 +270,8 @@ export const marineForecastTool: ToolDefinition<typeof inputSchema, Data> = {
     "the water rather than in the air. " +
     "Do not use this for wind, air temperature or precipitation, which is " +
     "get_norwegian_weather_forecast from MET Norway, and do not use it for official danger " +
-    "warnings. A coordinate no model covers returns null sections rather than failing. " +
+    "warnings. Tides and water levels are get_norwegian_tides. A coordinate no model covers " +
+    "returns null sections rather than failing. " +
     "Requires NORWAY_MCP_BARENTSWATCH_CLIENT_ID and NORWAY_MCP_BARENTSWATCH_CLIENT_SECRET.",
   inputSchema,
   dataSchema,

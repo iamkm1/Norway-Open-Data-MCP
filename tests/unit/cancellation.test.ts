@@ -70,14 +70,21 @@ const ARGUMENTS: Record<string, Record<string, unknown>> = {
   get_intervention_free_nature_at: { latitude: 61.1, longitude: 8.1 },
   get_land_resources_at: { latitude: 61.1, longitude: 8.1 },
   get_nature_profile: { latitude: 61.1, longitude: 8.1 },
+  get_norwegian_weather_warnings: { latitude: 60.39, longitude: 5.32 },
+  get_norwegian_precipitation_nowcast: { latitude: 59.91, longitude: 10.75 },
+  get_norwegian_sun_times: { latitude: 69.65, longitude: 18.96 },
+  get_norwegian_tides: { latitude: 60.398, longitude: 5.32 },
+  get_norwegian_weather_history: { stationId: "SN18700", startDate: "2026-07-01" },
+  get_weather_conditions_profile: { latitude: 60.398, longitude: 5.32 },
 };
 
-/** Credentials the maritime tools are gated on; values are never sent anywhere. */
+/** Credentials the gated tools need; values are never sent anywhere. */
 const MARITIME_CONFIG = {
   barentswatchClientId: "test-client-id",
   barentswatchClientSecret: "test-client-secret",
   barentswatchAisClientId: "test-ais-client-id",
   barentswatchAisClientSecret: "test-ais-client-secret",
+  metFrostClientId: "test-frost-client-id",
 } as const;
 
 /**
@@ -109,9 +116,10 @@ function createSignalRecordingSdk(seen: AbortSignal[]): NorwayOpenDataLike {
       municipality: hang,
       vessel: hang,
       natureAtLocation: hang,
+      conditionsAtLocation: hang,
     },
     addresses: { search: hang },
-    weather: { forecast: hang },
+    weather: { forecast: hang, getWarnings: hang, getNowcast: hang, getSunTimes: hang },
     hazards: {
       getFloodWarnings: hang,
       getAvalancheWarnings: hang,
@@ -172,6 +180,8 @@ function createSignalRecordingSdk(seen: AbortSignal[]): NorwayOpenDataLike {
       getInterventionFreeAreasAt: hang,
     },
     land: { getLandResourcesAt: hang },
+    tides: { getTideTable: hang, getWaterLevels: hang },
+    climate: { searchStations: hang, getObservations: hang, getClimateNormals: hang },
   });
 }
 
